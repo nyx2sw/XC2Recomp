@@ -6,6 +6,7 @@ param(
     [string]$OutDir = "",
     [string]$DllSourceDir = "",
     [string]$IconPath = "",
+    [string]$LocalizationSourceDir = "",
     [string]$Strip = "llvm-strip",
     [switch]$Zip
 )
@@ -65,6 +66,21 @@ foreach ($dll in $openSourceDlls) {
 
 $hintsSrc = Join-Path $repoRoot 'tools\xenoblade2.hints'
 if (Test-Path $hintsSrc) { Copy-Item $hintsSrc (Join-Path $rtDir 'xenoblade2.hints') -Force }
+
+if ($LocalizationSourceDir -and (Test-Path $LocalizationSourceDir)) {
+    foreach ($pack in @('pt-br', 'pt-br-jp')) {
+        $srcPack = Join-Path $LocalizationSourceDir $pack
+        if (Test-Path (Join-Path $srcPack 'romfs\bf2.arh')) {
+            $dstPack = Join-Path $rtDir "localization\$pack"
+            New-Item -ItemType Directory -Path (Join-Path $dstPack 'romfs') -Force | Out-Null
+            foreach ($rel in @('manifest.json', 'romfs\bf2.arh', 'romfs\bf2.ard.append')) {
+                $sf = Join-Path $srcPack $rel
+                if (Test-Path $sf) { Copy-Item $sf (Join-Path $dstPack $rel) -Force }
+            }
+            Write-Host "    Bundled localization pack: $pack" -ForegroundColor DarkCyan
+        }
+    }
+}
 
 foreach ($lic in @('LICENSE', 'LICENSE.apache', 'NOTICE')) {
     Copy-Item (Join-Path $repoRoot $lic) (Join-Path $rtDir "licenses\$lic") -Force

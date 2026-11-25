@@ -10,6 +10,20 @@ A native Windows PC launcher, First-Run `.nup` setup pipeline, and runtime exten
 
 ---
 
+## Sobre o Projeto (Português)
+
+**XC2Recomp** é um projeto independente que traz *Xenoblade Chronicles 2 — Nintendo Switch 2 Edition (v3.0.1)* de forma nativa para PC (Windows), com recompilação estática (AOT), launcher próprio e melhorias modernas de imagem e desempenho — incluindo resoluções até 4K, 60–240 FPS, DLSS 4.5 / FSR 3.1, menu nativo de opções de PC dentro do jogo, backup automático de saves e integração com Discord e Steam.
+
+A versão pronta na aba **Releases** já acompanha a **tradução e localização completa em Português do Brasil (PT-BR)**, pronta para usar assim que você aplica o seu arquivo `.nup`, com troca em 1 clique no launcher sem alterar os arquivos originais do jogo:
+
+- **PT-BR (Localização Ocidental):** textos, menus, interface e diálogos completos em português mantendo os nomes oficiais do ocidente (*Pyra, Mythra, Malos, Morag, Alrest*).
+- **PT-BR (Nomes Originais JP):** tradução completa preservando os nomes originais do roteiro japonês (*Homura, Hikari, Metsu, Meleph, Alst*), pensada especialmente para quem joga com áudio em japonês.
+- **Original do Jogo:** permite voltar ao texto original intacto quando quiser.
+
+> Basta baixar o pacote da Release, abrir o `Xenoblade2Launcher.exe` e arrastar/selecionar o seu arquivo `.nup` da Switch 2 Edition 3.0.1 — o instalador cuida da extração, das expansões (incluindo *Torna*), da compilação e ativa as artes, trilha sonora, efeitos e tradução automaticamente.
+
+---
+
 ## Highlights
 
 - **Guided First-Run `.nup` Setup Pipeline** (`XC2.Core`):
@@ -45,6 +59,9 @@ A native Windows PC launcher, First-Run `.nup` setup pipeline, and runtime exten
            native_ui.dll
            presence.dll
            presence_names.tsv
+         localization/
+           pt-br/
+           pt-br-jp/
          licenses/
      ```
 2. Ensure **Microsoft Edge WebView2 Runtime** (pre-installed on Windows 10/11) and up-to-date **Vulkan GPU drivers** are installed.
