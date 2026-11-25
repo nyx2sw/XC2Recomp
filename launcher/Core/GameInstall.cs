@@ -40,7 +40,8 @@ public sealed record InstallStatus(
     DlcAddonInfo[] Addons,
     string? VisualKitDir,
     bool IsReadyToPlay,
-    string[] AvailableInstallDirs
+    string[] AvailableInstallDirs,
+    string? DlssVersion = null
 );
 
 public static class GameInstall
@@ -133,6 +134,7 @@ public static class GameInstall
         bool hasRomfs = File.Exists(Path.Combine(romfsDir, "bf2.ard"));
         bool hasDlss = File.Exists(Path.Combine(installDir, "nvngx_dlss.dll")) &&
                        File.Exists(Path.Combine(installDir, "snx_dlss.dll"));
+        string? dlssVersion = hasDlss ? DlssDownloader.GetInstalledVersion(installDir) : null;
         bool hasNacp = File.Exists(nacpPath) || File.Exists(Path.Combine(dataDir, "control.nacp"));
         bool hasIni = File.Exists(iniPath);
 
@@ -236,7 +238,8 @@ public static class GameInstall
             Addons: addons.ToArray(),
             VisualKitDir: visualKit,
             IsReadyToPlay: hasExe && hasAot && hasRomfs,
-            AvailableInstallDirs: DiscoverInstallDirs(projectRoot)
+            AvailableInstallDirs: DiscoverInstallDirs(projectRoot),
+            DlssVersion: dlssVersion
         );
     }
 

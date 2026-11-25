@@ -629,6 +629,53 @@ try
         Assert(SaveManager.InferEmulatorName(@"C:\Users\X\AppData\Roaming\Ryujinx\bis\user\save") == "Ryujinx", "Infer Ryujinx");
         Assert(SaveManager.InferEmulatorName(@"C:\Users\X\AppData\Roaming\eden\nand\user\save") == "Eden", "Infer Eden");
     });
+
+    Check("DlssDownloader verifies official NVIDIA Authenticode signature and rejects unsigned DLLs", () =>
+    {
+        var fakeDll = Path.Combine(tempRoot, "fake_nvngx_dlss.dll");
+        File.WriteAllBytes(fakeDll, new byte[6_000_000]);
+        bool rejected = false;
+        try { DlssDownloader.VerifyNvidiaDll(fakeDll); }
+        catch (InvalidDataException) { rejected = true; }
+        Assert(rejected, "Unsigned/corrupt DLL must be rejected");
+
+        var realDll = Path.Combine(projectRoot, "games", "nvngx_dlss.dll");
+        if (File.Exists(realDll))
+        {
+            var (ver, signer, sz) = DlssDownloader.VerifyNvidiaDll(realDll);
+            Assert(signer.Contains("NVIDIA Corporation", StringComparison.OrdinalIgnoreCase), $"Unexpected signer: {signer}");
+            Assert(!string.IsNullOrWhiteSpace(ver) && sz > 20_000_000, $"Unexpected DLSS metadata: v{ver}, {sz}");
+            Console.WriteLine($"       Verified local NVIDIA DLSS v{ver} ({sz / 1048576.0:F1} MiB) · {signer[..Math.Min(42, signer.Length)]}");
+        }
+    });
+
+    Check("ShaderCatalogBuilder builds SNXS v1 directly from romfs + addons with exact count parity", () =>
+    {
+        var realData = Path.Combine(projectRoot, "games", "xenoblade2_data");
+        if (!File.Exists(Path.Combine(realData, "romfs", "bf2.ard"))) return;
+
+        var outSnxs = Path.Combine(tempRoot, "test_shaders.snxs");
+        var res = ShaderCatalogBuilder.Build(realData, outSnxs, null, CancellationToken.None);
+        Assert(File.Exists(outSnxs), "SNXS file created");
+        Assert(res.UniqueShaders > 9000, $"Expected >9000 unique shaders, got {res.UniqueShaders}");
+
+        var header = File.ReadAllBytes(outSnxs).AsSpan(0, 24);
+        Assert(Encoding.ASCII.GetString(header.Slice(0, 4)) == "SNXS", "SNXS magic");
+        Assert(BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(4, 4)) == 1u, "SNXS v1");
+        Assert(BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(8, 4)) == (uint)res.UniqueShaders, "SNXS count header matches");
+
+        var existingSnxs = Path.Combine(projectRoot, "games", "shader_cache", "xc2_shaders.snxs");
+        if (File.Exists(existingSnxs))
+        {
+            using var fs = File.OpenRead(existingSnxs);
+            Span<byte> eh = stackalloc byte[16];
+            fs.ReadExactly(eh);
+            int expectedCount = BinaryPrimitives.ReadInt32LittleEndian(eh.Slice(8, 4));
+            Assert(res.UniqueShaders == expectedCount,
+                $"Shader count parity mismatch: C# built {res.UniqueShaders}, reference has {expectedCount}");
+        }
+        Console.WriteLine($"       ShaderCatalogBuilder C# parity OK: {res.UniqueShaders:N0} shaders ({res.SizeBytes / 1048576.0:F1} MiB) in {res.ElapsedSeconds:F1}s");
+    });
 }
 finally
 {

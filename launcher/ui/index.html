@@ -568,6 +568,22 @@
               <details class="adv-details">
                 <summary>Ajustes avançados &amp; Extras <span class="summary-meta">DLSS 4.5, Amiibo virtual, escala e cache</span></summary>
                 <div class="option-list adv-list">
+                  <div class="opt-row" id="dlssLibraryRow">
+                    <div class="opt-label">
+                      <strong>Biblioteca NVIDIA DLSS 4.5 (Opcional)</strong>
+                      <span id="dlssLibraryHint">Baixa a nvngx_dlss.dll oficial direto do GitHub da NVIDIA com validação de assinatura.</span>
+                      <div class="inline-prog-wrap hidden" id="dlssProgInline">
+                        <div class="setup-bar"><div class="setup-bar-fill" id="dlssProgFill" style="width:0%"></div></div>
+                        <small id="dlssProgText">—</small>
+                      </div>
+                    </div>
+                    <div class="opt-ctrl right opt-btn-pair">
+                      <button class="xc-btn sm primary" id="dlssDownloadBtn" type="button" data-f>Baixar oficial</button>
+                      <button class="xc-btn sm ghost" id="dlssPickLocalBtn" type="button" data-f>Escolher .dll</button>
+                      <button class="xc-btn sm danger hidden" id="dlssCancelBtn" type="button" data-f>Cancelar</button>
+                    </div>
+                  </div>
+
                   <div class="opt-row">
                     <div class="opt-label">
                       <strong>Modelo NVIDIA DLSS 4.5</strong>
@@ -672,9 +688,15 @@
                     <div class="opt-label">
                       <strong>Cache de shaders</strong>
                       <span id="shaderCacheHint">Pré-compila os shaders na abertura para gameplay suave.</span>
+                      <div class="inline-prog-wrap hidden" id="shaderProgInline">
+                        <div class="setup-bar"><div class="setup-bar-fill" id="shaderProgFill" style="width:0%"></div></div>
+                        <small id="shaderProgText">—</small>
+                      </div>
                     </div>
-                    <div class="opt-ctrl right">
-                      <button class="xc-btn sm ghost" id="rebuildShadersBtn" data-f>Recompilar</button>
+                    <div class="opt-ctrl right opt-btn-pair">
+                      <button class="xc-btn sm primary" id="buildShaderCatalogBtn" type="button" data-f>Preparar catálogo</button>
+                      <button class="xc-btn sm danger hidden" id="cancelShaderCatalogBtn" type="button" data-f>Cancelar</button>
+                      <button class="xc-btn sm ghost" id="rebuildShadersBtn" type="button" data-f>Recompilar</button>
                     </div>
                   </div>
                 </div>
@@ -1070,6 +1092,7 @@
 
               <div class="xc-rail-band ob-rec-banner" id="obRecBanner"></div>
               <div class="ob-preset-grid" id="obPresetGrid"></div>
+              <div class="ob-opt-grid" id="obOptGrid"></div>
               <p class="ob-footnote">Você pode alternar o perfil a qualquer hora na tela inicial ou ajustar upscaling, FPS, HDR10, Reflex e iluminação <strong>ao vivo</strong> sem fechar o jogo.</p>
             </div>
 

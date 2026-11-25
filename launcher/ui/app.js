@@ -23,6 +23,10 @@ const state = {
   steam: [],
   setup: { running: false, preflight: null },
   setupProgress: null,
+  dlss: { running: false },
+  dlssProgress: null,
+  shaderBuild: { running: false },
+  shaderProgress: null,
   playing: { running: false },
   logs: {},
   focusedEl: null,
@@ -571,6 +575,7 @@ window.__xc2 = {
     closeTour(false);
     closeHelpMenu();
     state.onboarding.simulateMissing = !!opts.simulateMissing;
+    state.onboarding.simulateMissingOpt = !!opts.simulateMissingOpt;
     state.onboarding.forceNupView = !!opts.forceNupView;
     openOnboarding(step);
   },
@@ -966,16 +971,7 @@ function renderSettings() {
   }
 
   const inst = state.install;
-  if (inst && $('shaderCacheHint')) {
-    const cnt = inst.shaderCatalogCount ? inst.shaderCatalogCount.toLocaleString('pt-BR') : null;
-    if (inst.shaderCachePrecompiled && cnt) {
-      $('shaderCacheHint').textContent = `Otimizado · ${cnt} shaders pré-compilados para sua placa de vídeo.`;
-    } else if (cnt) {
-      $('shaderCacheHint').textContent = `Pré-compilação pronta para rodar na próxima abertura (${cnt} shaders).`;
-    } else {
-      $('shaderCacheHint').textContent = 'Pré-compila os shaders na abertura para gameplay suave sem engasgos.';
-    }
-  }
+  renderDlssAndShaderControls(inst, hw);
 
   document.querySelectorAll('[data-theme-pick]').forEach(s =>
     s.classList.toggle('on', s.dataset.themePick === (cfg.accentTheme || 'aegis'))
@@ -1019,6 +1015,87 @@ function renderSettings() {
 
   renderSteamAccounts();
   XCSelect.syncAll();
+}
+
+function renderDlssAndShaderControls(inst, hw) {
+  const dlssRow = $('dlssLibraryRow');
+  const dlssRun = !!state.dlss?.running;
+  const dlssProg = state.dlssProgress;
+  if (dlssRow) {
+    const showDlssRow = !!(hw?.isNvidiaRtx || inst?.hasDlss);
+    dlssRow.classList.toggle('hidden', !showDlssRow);
+    const hint = $('dlssLibraryHint');
+    if (hint && inst) {
+      if (inst.hasDlss) {
+        const ver = inst.dlssVersion ? `v${inst.dlssVersion}` : 'verificada';
+        hint.textContent = `Instalada (${ver}) · assinatura oficial NVIDIA verificada (DLSS 4.5 e DLAA ativos).`;
+      } else {
+        hint.textContent = 'Ausente — usando AMD FSR 3.1. Clique para baixar a nvngx_dlss.dll oficial direto de github.com/NVIDIA/DLSS.';
+      }
+    }
+    const dlBtn = $('dlssDownloadBtn');
+    const pickBtn = $('dlssPickLocalBtn');
+    const cancelBtn = $('dlssCancelBtn');
+    if (dlBtn) {
+      dlBtn.textContent = inst?.hasDlss ? 'Atualizar oficial' : 'Baixar oficial';
+      dlBtn.classList.toggle('hidden', dlssRun);
+      dlBtn.disabled = !!state.playing?.running;
+    }
+    if (pickBtn) {
+      pickBtn.classList.toggle('hidden', dlssRun);
+      pickBtn.disabled = !!state.playing?.running;
+    }
+    cancelBtn?.classList.toggle('hidden', !dlssRun);
+
+    const progWrap = $('dlssProgInline');
+    if (progWrap) {
+      const showProg = dlssRun || (dlssProg && !dlssProg.isDone);
+      progWrap.classList.toggle('hidden', !showProg);
+      if (showProg && dlssProg) {
+        $('dlssProgFill').style.width = `${Math.max(0, Math.min(100, dlssProg.percent || 0))}%`;
+        $('dlssProgFill').classList.toggle('err', !!dlssProg.isError);
+        $('dlssProgText').textContent = `${dlssProg.detail || dlssProg.stage} (${Math.round(dlssProg.percent || 0)}%)`;
+      }
+    }
+  }
+
+  const shRun = !!state.shaderBuild?.running;
+  const shProg = state.shaderProgress;
+  if (inst && $('shaderCacheHint')) {
+    const cnt = inst.shaderCatalogCount ? inst.shaderCatalogCount.toLocaleString('pt-BR') : null;
+    if (inst.shaderCachePrecompiled && cnt) {
+      $('shaderCacheHint').textContent = `Otimizado · ${cnt} shaders pré-compilados para sua placa de vídeo.`;
+    } else if (cnt) {
+      $('shaderCacheHint').textContent = `Catálogo pronto (${cnt} shaders) · pré-compila uma única vez na próxima abertura.`;
+    } else {
+      $('shaderCacheHint').textContent = 'Sem catálogo — gera localmente a partir dos seus arquivos do jogo para eliminar travadinhas.';
+    }
+  }
+  const buildBtn = $('buildShaderCatalogBtn');
+  const cancelShBtn = $('cancelShaderCatalogBtn');
+  const rebuildBtn = $('rebuildShadersBtn');
+  if (buildBtn) {
+    buildBtn.textContent = inst?.shaderCatalogCount > 0 ? 'Regerar catálogo' : 'Preparar catálogo';
+    buildBtn.classList.toggle('primary', !(inst?.shaderCatalogCount > 0));
+    buildBtn.classList.toggle('ghost', !!(inst?.shaderCatalogCount > 0));
+    buildBtn.classList.toggle('hidden', shRun);
+    buildBtn.disabled = !inst?.hasRomfs || !!state.playing?.running;
+  }
+  cancelShBtn?.classList.toggle('hidden', !shRun);
+  if (rebuildBtn) {
+    rebuildBtn.classList.toggle('hidden', shRun || !(inst?.shaderCatalogCount > 0));
+    rebuildBtn.disabled = !!state.playing?.running;
+  }
+  const shProgWrap = $('shaderProgInline');
+  if (shProgWrap) {
+    const showShProg = shRun || (shProg && !shProg.isDone);
+    shProgWrap.classList.toggle('hidden', !showShProg);
+    if (showShProg && shProg) {
+      $('shaderProgFill').style.width = `${Math.max(0, Math.min(100, shProg.percent || 0))}%`;
+      $('shaderProgFill').classList.toggle('err', !!shProg.isError);
+      $('shaderProgText').textContent = `${shProg.detail || shProg.stage} (${Math.round(shProg.percent || 0)}%)`;
+    }
+  }
 }
 
 function renderSteamAccounts() {
@@ -1510,9 +1587,129 @@ function renderOnboardingGraphics() {
 
   $('obPresetGrid').querySelectorAll('[data-ob-preset]').forEach(btn => {
     btn.addEventListener('click', () => {
+      AudioEngine.playSfx('decide', 0.78);
       cmd('preset.set', { id: btn.dataset.obPreset });
     });
   });
+
+  renderOnboardingOptCards(hw, inst);
+}
+
+function renderOnboardingOptCards(hw, inst) {
+  const wrap = $('obOptGrid');
+  if (!wrap) return;
+
+  const simOpt = !!state.onboarding.simulateMissingOpt;
+  const isRtx = !!hw?.isNvidiaRtx;
+  const hasDlss = !simOpt && !!inst?.hasDlss;
+  const hasRomfs = !state.onboarding.simulateMissing && !!inst?.hasRomfs;
+  const shaderCnt = simOpt ? 0 : (inst?.shaderCatalogCount || 0);
+  const precompiled = !simOpt && !!inst?.shaderCachePrecompiled;
+  const dlssRun = !!state.dlss?.running;
+  const dlssProg = state.dlssProgress;
+  const shRun = !!state.shaderBuild?.running;
+  const shProg = state.shaderProgress;
+
+  const cards = [];
+
+  if (isRtx) {
+    let bodyHtml;
+    if (dlssRun) {
+      const pct = Math.round(dlssProg?.percent || 0);
+      bodyHtml = `
+        <div class="ob-opt-prog">
+          <div class="ob-opt-prog-head">
+            <strong>${esc(dlssProg?.stage || 'Baixando NVIDIA DLSS...')}</strong>
+            <span>${pct}%</span>
+          </div>
+          <div class="setup-bar"><div class="setup-bar-fill" style="width:${pct}%"></div></div>
+          <p class="ob-opt-desc">${esc(dlssProg?.detail || 'Conectando a github.com/NVIDIA/DLSS...')}</p>
+        </div>
+        <div class="ob-opt-foot">
+          <span class="ob-opt-desc">Fonte oficial NVIDIA · assinatura verificada</span>
+          <button class="xc-btn sm danger" id="obDlssCancelBtn" type="button" data-f>Cancelar</button>
+        </div>
+      `;
+    } else if (hasDlss) {
+      const ver = inst?.dlssVersion ? `v${inst.dlssVersion}` : 'Verificado';
+      bodyHtml = `
+        <div class="ob-opt-top">
+          <div class="ob-opt-title"><span class="xc-diamond"></span><strong>NVIDIA DLSS 4.5 / DLAA</strong></div>
+          <span class="xc-status good">Instalado · ${esc(ver)}</span>
+        </div>
+        <p class="ob-opt-desc">Biblioteca oficial NVIDIA verificada — DLSS 4.5 e DLAA ativos para sua placa RTX.</p>
+      `;
+    } else {
+      bodyHtml = `
+        <div class="ob-opt-top">
+          <div class="ob-opt-title"><span class="xc-diamond"></span><strong>Ativar NVIDIA DLSS 4.5 / DLAA</strong></div>
+          <span class="xc-status">Opcional · RTX</span>
+        </div>
+        <p class="ob-opt-desc">Baixa a <code>nvngx_dlss.dll</code> oficial direto do GitHub da NVIDIA (assinatura verificada). Sem ela, usa FSR 3.1.</p>
+        <div class="ob-opt-foot">
+          <div class="ob-opt-actions">
+            <button class="xc-btn sm primary" id="obDlssDownloadBtn" type="button" data-f>Baixar DLSS oficial</button>
+            <button class="inline-link" id="obDlssPickBtn" type="button" data-f>Escolher .dll local</button>
+          </div>
+        </div>
+      `;
+    }
+    cards.push(`<div class="ob-opt-card ${hasDlss ? 'ready' : ''}">${bodyHtml}</div>`);
+  }
+
+  let shHtml;
+  if (shRun) {
+    const pct = Math.round(shProg?.percent || 0);
+    const stageLbl = shProg?.stageIndex > 0 ? `[${shProg.stageIndex}/4] ${shProg.stage}` : (shProg?.stage || 'Analisando shaders...');
+    shHtml = `
+      <div class="ob-opt-prog">
+        <div class="ob-opt-prog-head">
+          <strong>${esc(stageLbl)}</strong>
+          <span>${pct}%</span>
+        </div>
+        <div class="setup-bar"><div class="setup-bar-fill" style="width:${pct}%"></div></div>
+        <p class="ob-opt-desc">${esc(shProg?.detail || 'Extraindo shaders do seu jogo...')}</p>
+      </div>
+      <div class="ob-opt-foot">
+        <span class="ob-opt-desc">100% local · somente leitura</span>
+        <button class="xc-btn sm danger" id="obShaderCancelBtn" type="button" data-f>Cancelar</button>
+      </div>
+    `;
+  } else if (shaderCnt > 0) {
+    const cntStr = shaderCnt.toLocaleString('pt-BR');
+    shHtml = `
+      <div class="ob-opt-top">
+        <div class="ob-opt-title"><span class="xc-diamond"></span><strong>Catálogo de Shaders</strong></div>
+        <span class="xc-status good">${precompiled ? 'Otimizado' : 'Pronto'} · ${cntStr}</span>
+      </div>
+      <p class="ob-opt-desc">${precompiled
+        ? 'Shaders pré-compilados para sua placa de vídeo — gameplay suave sem engasgos.'
+        : 'Pré-compilação única pronta para rodar na abertura e eliminar travadinhas no mapa.'}</p>
+    `;
+  } else {
+    shHtml = `
+      <div class="ob-opt-top">
+        <div class="ob-opt-title"><span class="xc-diamond"></span><strong>Pré-compilar Shaders (Zero engasgos)</strong></div>
+        <span class="xc-status">Opcional</span>
+      </div>
+      <p class="ob-opt-desc">${hasRomfs
+        ? 'Extrai shaders do seu próprio jogo (~43 MB) para pré-compilar uma única vez na abertura. Pode pular se preferir.'
+        : 'Disponível assim que o arquivo .nup for instalado na Etapa 1. Pode pular e ativar depois.'}</p>
+      <div class="ob-opt-foot">
+        <button class="xc-btn sm ${hasRomfs ? 'primary' : 'ghost'}" id="obShaderBuildBtn" type="button" ${hasRomfs ? '' : 'disabled'} data-f>Preparar shaders agora</button>
+      </div>
+    `;
+  }
+  cards.push(`<div class="ob-opt-card ${shaderCnt > 0 ? 'ready' : ''}">${shHtml}</div>`);
+
+  wrap.classList.toggle('single', cards.length === 1);
+  wrap.innerHTML = cards.join('');
+
+  $('obDlssDownloadBtn')?.addEventListener('click', () => { AudioEngine.playSfx('decide', 0.8); cmd('dlss.download'); });
+  $('obDlssPickBtn')?.addEventListener('click', () => { AudioEngine.playSfx('open', 0.75); cmd('dlss.pickLocal'); });
+  $('obDlssCancelBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cancel', 0.8); cmd('dlss.cancel'); });
+  $('obShaderBuildBtn')?.addEventListener('click', () => { AudioEngine.playSfx('decide', 0.8); cmd('shaders.buildCatalog'); });
+  $('obShaderCancelBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cancel', 0.8); cmd('shaders.cancelBuild'); });
 }
 
 function renderOnboardingLanguage() {
@@ -2120,9 +2317,14 @@ $('saveSettingsBtn').addEventListener('click', () => {
   });
 });
 
-$('resetSettingsBtn').addEventListener('click', () => cmd('settings.resetRecommended'));
-$('rebuildShadersBtn')?.addEventListener('click', () => cmd('shaders.rebuild'));
-$('createDesktopShortcutBtn').addEventListener('click', () => cmd('shortcut.desktop'));
+$('resetSettingsBtn').addEventListener('click', () => { AudioEngine.playSfx('decide', 0.8); cmd('settings.resetRecommended'); });
+$('rebuildShadersBtn')?.addEventListener('click', () => { AudioEngine.playSfx('decide', 0.8); cmd('shaders.rebuild'); });
+$('buildShaderCatalogBtn')?.addEventListener('click', () => { AudioEngine.playSfx('decide', 0.8); cmd('shaders.buildCatalog'); });
+$('cancelShaderCatalogBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cancel', 0.8); cmd('shaders.cancelBuild'); });
+$('dlssDownloadBtn')?.addEventListener('click', () => { AudioEngine.playSfx('decide', 0.8); cmd('dlss.download'); });
+$('dlssPickLocalBtn')?.addEventListener('click', () => { AudioEngine.playSfx('open', 0.75); cmd('dlss.pickLocal'); });
+$('dlssCancelBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cancel', 0.8); cmd('dlss.cancel'); });
+$('createDesktopShortcutBtn').addEventListener('click', () => { AudioEngine.playSfx('decide', 0.8); cmd('shortcut.desktop'); });
 
 // System controls (inside Settings -> Sistema)
 $('sysRefreshBtn').addEventListener('click', () => cmd('refresh'));
@@ -2396,7 +2598,7 @@ if (window.chrome && window.chrome.webview) {
 
     if (m.t === 'state') {
       const prevRomfs = lastMediaRomfs;
-      for (const k of ['config', 'install', 'hardware', 'recommendation', 'presets', 'launchPlan', 'bgmTracks', 'saves', 'mods', 'ini', 'steam', 'setup', 'playing', 'logs']) {
+      for (const k of ['config', 'install', 'hardware', 'recommendation', 'presets', 'launchPlan', 'bgmTracks', 'saves', 'mods', 'ini', 'steam', 'setup', 'dlss', 'shaderBuild', 'playing', 'logs']) {
         if (m[k] !== undefined) state[k] = m[k];
       }
       if (m.playing?.running) {
@@ -2425,6 +2627,16 @@ if (window.chrome && window.chrome.webview) {
       renderSetup();
       if (state.onboarding.open) renderOnboardingInstall();
       if (m.isDone && !m.isError) refreshRuntimeMedia();
+    } else if (m.t === 'dlssProgress') {
+      state.dlssProgress = m;
+      if (m.isDone) state.dlss = { running: false };
+      renderDlssAndShaderControls(state.install, state.hardware);
+      if (state.onboarding.open && state.onboarding.step === 1) renderOnboardingOptCards(state.hardware, state.install);
+    } else if (m.t === 'shaderProgress') {
+      state.shaderProgress = m;
+      if (m.isDone) state.shaderBuild = { running: false };
+      renderDlssAndShaderControls(state.install, state.hardware);
+      if (state.onboarding.open && state.onboarding.step === 1) renderOnboardingOptCards(state.hardware, state.install);
     } else if (m.t === 'go' && m.s) {
       goScreen(m.s);
     } else if (m.t === 'toast') {

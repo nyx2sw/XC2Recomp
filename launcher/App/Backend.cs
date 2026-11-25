@@ -22,6 +22,10 @@ public sealed class Backend
     CancellationTokenSource? setupCts;
     bool setupRunning;
     SetupPreflightResult? lastSetupPreflight;
+    CancellationTokenSource? dlssCts;
+    bool dlssRunning;
+    CancellationTokenSource? shaderCts;
+    bool shaderRunning;
 
     InstallStatus install;
     HardwareInfo hardware;
@@ -326,6 +330,26 @@ public sealed class Backend
                 RebuildShaderCache();
                 break;
 
+            case "shaders.buildCatalog":
+                HandleShaderCatalogBuild();
+                break;
+
+            case "shaders.cancelBuild":
+                HandleShaderCatalogCancel();
+                break;
+
+            case "dlss.download":
+                HandleDlssDownload();
+                break;
+
+            case "dlss.cancel":
+                HandleDlssCancel();
+                break;
+
+            case "dlss.pickLocal":
+                HandleDlssPickLocal();
+                break;
+
             case "steam.list":
                 PushSteam();
                 break;
@@ -557,6 +581,196 @@ public sealed class Backend
         install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: false);
         PushState("install", install);
         Toast("O cache de shaders será reconstruído na próxima abertura do jogo.");
+    }
+
+    void HandleDlssDownload()
+    {
+        if (dlssRunning)
+            throw new InvalidOperationException("O download do NVIDIA DLSS já está em andamento.");
+        if (playing || GameRunner.IsGameRunning())
+            throw new InvalidOperationException("Feche o jogo antes de instalar a biblioteca NVIDIA DLSS.");
+
+        dlssRunning = true;
+        dlssCts?.Dispose();
+        dlssCts = new CancellationTokenSource();
+        var ct = dlssCts.Token;
+        PushState("dlss", new { running = true });
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var res = await DlssDownloader.DownloadOfficialAsync(install.InstallDir, prog =>
+                {
+                    Send(new JsonObject
+                    {
+                        ["t"] = "dlssProgress",
+                        ["stage"] = prog.Stage,
+                        ["percent"] = Math.Round(prog.Percent, 1),
+                        ["detail"] = prog.Detail,
+                        ["isDone"] = prog.IsDone,
+                        ["isError"] = prog.IsError
+                    });
+                }, ct);
+
+                dlssRunning = false;
+                install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: false);
+                if (install.HasDlss && hardware.IsNvidiaRtx && (install.IsReadyToPlay || File.Exists(install.IniPath)))
+                    GameRunner.SyncPresetToIni(install, config, hardware);
+                PushFullState(includeHashes: false);
+                Toast($"NVIDIA DLSS v{res.Version} instalado e verificado! DLSS 4.5 / DLAA prontos.", "decide");
+            }
+            catch (OperationCanceledException)
+            {
+                dlssRunning = false;
+                Send(new JsonObject
+                {
+                    ["t"] = "dlssProgress",
+                    ["stage"] = "Cancelado",
+                    ["percent"] = 0,
+                    ["detail"] = "Download do NVIDIA DLSS cancelado.",
+                    ["isDone"] = true,
+                    ["isError"] = true
+                });
+                PushState("dlss", new { running = false });
+                Toast("Download do NVIDIA DLSS cancelado.", isError: true);
+            }
+            catch (Exception ex)
+            {
+                dlssRunning = false;
+                LauncherLog.Write($"dlss download failed: {ex.Message}");
+                Send(new JsonObject
+                {
+                    ["t"] = "dlssProgress",
+                    ["stage"] = "Erro",
+                    ["percent"] = 0,
+                    ["detail"] = ex.Message,
+                    ["isDone"] = true,
+                    ["isError"] = true
+                });
+                PushState("dlss", new { running = false });
+                Toast($"Erro ao baixar DLSS: {ex.Message}", isError: true);
+            }
+        });
+    }
+
+    void HandleDlssCancel()
+    {
+        if (dlssRunning && dlssCts != null && !dlssCts.IsCancellationRequested)
+        {
+            dlssCts.Cancel();
+            Toast("Cancelando download do DLSS...");
+        }
+    }
+
+    void HandleDlssPickLocal()
+    {
+        if (dlssRunning)
+            throw new InvalidOperationException("Aguarde o download do DLSS terminar.");
+        if (playing || GameRunner.IsGameRunning())
+            throw new InvalidOperationException("Feche o jogo antes de instalar a biblioteca NVIDIA DLSS.");
+
+        var picked = host.PickFile("Selecionar nvngx_dlss.dll oficial da NVIDIA", "NVIDIA DLSS (nvngx_dlss.dll)", "nvngx_dlss*.dll");
+        if (picked == null) return;
+
+        var res = DlssDownloader.InstallFromLocalFile(picked, install.InstallDir);
+        install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: false);
+        if (install.HasDlss && hardware.IsNvidiaRtx && (install.IsReadyToPlay || File.Exists(install.IniPath)))
+            GameRunner.SyncPresetToIni(install, config, hardware);
+        PushFullState(includeHashes: false);
+        Toast($"NVIDIA DLSS v{res.Version} importado e verificado com sucesso!", "decide");
+    }
+
+    void HandleShaderCatalogBuild()
+    {
+        if (shaderRunning)
+            throw new InvalidOperationException("A geração do catálogo de shaders já está em andamento.");
+        if (playing || GameRunner.IsGameRunning())
+            throw new InvalidOperationException("Feche o jogo antes de gerar o catálogo de shaders.");
+        if (!install.HasRomfs)
+            throw new InvalidOperationException("Instale o arquivo .nup primeiro para gerar o catálogo de shaders.");
+
+        shaderRunning = true;
+        shaderCts?.Dispose();
+        shaderCts = new CancellationTokenSource();
+        var ct = shaderCts.Token;
+        PushState("shaderBuild", new { running = true });
+
+        string dataDir = Path.Combine(install.InstallDir, "xenoblade2_data");
+        string outPath = Path.Combine(install.ShaderCacheDir, "xc2_shaders.snxs");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var res = await ShaderCatalogBuilder.BuildAsync(dataDir, outPath, prog =>
+                {
+                    Send(new JsonObject
+                    {
+                        ["t"] = "shaderProgress",
+                        ["stage"] = prog.Stage,
+                        ["stageIndex"] = prog.StageIndex,
+                        ["stageCount"] = prog.StageCount,
+                        ["percent"] = Math.Round(prog.Percent, 1),
+                        ["shadersFound"] = prog.ShadersFound,
+                        ["detail"] = prog.Detail,
+                        ["isDone"] = prog.IsDone,
+                        ["isError"] = prog.IsError
+                    });
+                }, ct);
+
+                shaderRunning = false;
+                install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: false);
+                PushFullState(includeHashes: false);
+                Toast($"Catálogo pronto: {res.UniqueShaders:N0} shaders ({res.ElapsedSeconds:F1}s). Pré-compilação ativa na próxima abertura!", "decide");
+            }
+            catch (OperationCanceledException)
+            {
+                shaderRunning = false;
+                Send(new JsonObject
+                {
+                    ["t"] = "shaderProgress",
+                    ["stage"] = "Cancelado",
+                    ["stageIndex"] = 0,
+                    ["stageCount"] = 4,
+                    ["percent"] = 0,
+                    ["shadersFound"] = 0,
+                    ["detail"] = "Geração do catálogo de shaders cancelada.",
+                    ["isDone"] = true,
+                    ["isError"] = true
+                });
+                PushState("shaderBuild", new { running = false });
+                Toast("Geração do catálogo de shaders cancelada.", isError: true);
+            }
+            catch (Exception ex)
+            {
+                shaderRunning = false;
+                LauncherLog.Write($"shader catalog build failed: {ex.Message}");
+                Send(new JsonObject
+                {
+                    ["t"] = "shaderProgress",
+                    ["stage"] = "Erro",
+                    ["stageIndex"] = 0,
+                    ["stageCount"] = 4,
+                    ["percent"] = 0,
+                    ["shadersFound"] = 0,
+                    ["detail"] = ex.Message,
+                    ["isDone"] = true,
+                    ["isError"] = true
+                });
+                PushState("shaderBuild", new { running = false });
+                Toast($"Erro ao gerar catálogo de shaders: {ex.Message}", isError: true);
+            }
+        });
+    }
+
+    void HandleShaderCatalogCancel()
+    {
+        if (shaderRunning && shaderCts != null && !shaderCts.IsCancellationRequested)
+        {
+            shaderCts.Cancel();
+            Toast("Cancelando geração de shaders...");
+        }
     }
 
     void HandleSteamAdd(string userId, bool launchViaLauncher)
@@ -849,6 +1063,8 @@ public sealed class Backend
             steam,
             setupPipeline = new { setupPipeline.StatusName, setupPipeline.IsAvailable },
             setup = new { running = setupRunning, preflight = lastSetupPreflight, statusName = setupPipeline.StatusName, isAvailable = setupPipeline.IsAvailable },
+            dlss = new { running = dlssRunning },
+            shaderBuild = new { running = shaderRunning },
             playing = new { running = playing, profile = activeLaunchProfile, startedAt = playingSince.ToString("HH:mm:ss") },
             logs = new
             {
