@@ -1,0 +1,1322 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="aegis">
+<head>
+  <meta charset="utf-8">
+  <title>Xenoblade Chronicles 2 · PC Edition</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="fit">
+    <div id="win" class="win">
+      <!-- Subtle Alrest ether motes -->
+      <canvas id="etherCanvas" class="ether-canvas" width="1280" height="800"></canvas>
+
+      <!-- Custom frameless title bar -->
+      <header class="topbar" id="topbar">
+        <div class="top-left">
+          <div class="brand">
+            <img class="brand-crest" src="/media/art/crystal.png" alt="" onerror="this.style.display='none'">
+            <span class="brand-title">Xenoblade Chronicles 2</span>
+          </div>
+
+          <nav class="nav" id="mainNav" role="tablist">
+            <button class="nav-tab on" data-nav="home" data-f>Jogar</button>
+            <button class="nav-tab" data-nav="saves" data-f>Saves</button>
+            <button class="nav-tab" data-nav="mods" data-f>Mods</button>
+            <button class="nav-tab" data-nav="settings" data-f>Configurações</button>
+          </nav>
+
+          <div class="ob-top-badge" id="obTopBadge">
+            <span class="xc-diamond"></span>
+            <span>Guia de Preparação · Alrest</span>
+          </div>
+        </div>
+
+        <div class="top-right">
+          <div class="help-anchor" id="helpAnchor">
+            <button class="audio-btn help-btn" id="helpBtn" data-f title="Ajuda, Guia Inicial e Tour" aria-label="Ajuda e Guia Inicial">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </button>
+            <div class="help-menu" id="helpMenu" role="menu">
+              <div class="help-menu-head">
+                <div class="xc-eyebrow"><span class="xc-diamond"></span><span>CENTRAL DE AJUDA</span></div>
+              </div>
+              <button class="help-opt" id="helpOpenWizard" type="button" data-f>
+                <strong>Assistente de Configuração Inicial</strong>
+                <span>Instalação (.nup), perfil gráfico recomendado, tradução, saves e controle.</span>
+              </button>
+              <button class="help-opt" id="helpStartTour" type="button" data-f>
+                <strong>Tour Interativo pela Interface</strong>
+                <span>Percorra cada aba do launcher com destaques guiados passo a passo.</span>
+              </button>
+              <button class="help-opt" id="helpOpenControls" type="button" data-f>
+                <strong>Testar Controle &amp; Atalhos do Jogo</strong>
+                <span>Teste botões/analógicos ao vivo e veja atalhos e o menu nativo de PC.</span>
+              </button>
+            </div>
+          </div>
+
+          <button class="audio-btn" id="musicBtn" data-f title="Música do jogo">
+            <svg class="icon-sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 5L6 9H3v6h3l5 4V5z"></path>
+              <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+              <path d="M18.8 5.8a9 9 0 0 1 0 12.4"></path>
+            </svg>
+            <svg class="icon-sound-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 5L6 9H3v6h3l5 4V5z"></path>
+              <line x1="22" y1="9" x2="16" y2="15"></line>
+              <line x1="16" y1="9" x2="22" y2="15"></line>
+            </svg>
+          </button>
+
+          <div class="win-btns">
+            <button class="wbtn" id="winMin" title="Minimizar" aria-label="Minimizar">
+              <svg viewBox="0 0 12 12"><line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" stroke-width="1.2"/></svg>
+            </button>
+            <button class="wbtn" id="winMax" title="Maximizar" aria-label="Maximizar">
+              <svg viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+            </button>
+            <button class="wbtn close" id="winClose" title="Fechar" aria-label="Fechar">
+              <svg viewBox="0 0 12 12"><line x1="2.5" y1="2.5" x2="9.5" y2="9.5" stroke="currentColor" stroke-width="1.25"/><line x1="9.5" y1="2.5" x2="2.5" y2="9.5" stroke="currentColor" stroke-width="1.25"/></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- ==================== SCREEN: HOME ==================== -->
+      <section class="screen active" id="s-home" data-screen="home">
+        <div class="backdrop">
+          <div class="backdrop-sky"></div>
+          <div class="backdrop-lattice"></div>
+          <div class="backdrop-art-frame">
+            <div class="backdrop-img home-art"></div>
+          </div>
+          <div class="backdrop-scrim home-scrim"></div>
+        </div>
+
+        <div class="home-stage">
+          <div class="home-hero">
+            <div class="logo-wrap">
+              <img class="game-logo logo-base" src="/media/art/logo_official.png" alt="Xenoblade Chronicles 2" onerror="this.style.display='none';this.parentElement.classList.add('logo-missing')">
+              <img class="game-logo logo-torna" src="/media/art/logo_torna.png" alt="Xenoblade Chronicles 2: Torna — The Golden Country" onerror="this.style.display='none';this.parentElement.classList.add('logo-missing')">
+              <div class="logo-wordmark" aria-hidden="true">
+                <span class="lw-title">XENOBLADE CHRONICLES 2</span>
+                <span class="lw-sub">PC EDITION · SWITCH 2 NATIVO</span>
+              </div>
+            </div>
+
+            <div class="home-save-info">
+              <div class="xc-eyebrow">
+                <span class="xc-diamond"></span>
+                <span id="homeRegion">ALREST</span>
+              </div>
+              <h1 id="homeLandmark" class="home-landmark">Carregando...</h1>
+              <p id="homeMeta" class="home-meta">Preparando sua aventura...</p>
+            </div>
+
+            <div class="play-area">
+              <button class="play-btn" id="playBtn" data-f>
+                <span class="play-btn-inner">
+                  <span class="play-btn-gem"></span>
+                  <span class="play-btn-label">Jogar</span>
+                  <span class="play-btn-gem"></span>
+                </span>
+              </button>
+
+              <div class="preset-picker" id="presetPicker">
+                <button class="preset-step" id="presetPrev" type="button" title="Perfil anterior" aria-label="Perfil anterior">
+                  <svg viewBox="0 0 12 12"><path d="M7.6 2.4L4 6L7.6 9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="preset-trigger" id="presetTrigger" data-f type="button" title="Ver todos os perfis gráficos">
+                  <svg class="preset-trigger-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                  <span id="playProfileLabel">1440p DLAA · 120 FPS</span>
+                </button>
+                <button class="preset-step" id="presetNext" type="button" title="Próximo perfil" aria-label="Próximo perfil">
+                  <svg viewBox="0 0 12 12"><path d="M4.4 2.4L8 6L4.4 9.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="preset-menu" id="presetMenu" role="listbox"></div>
+              </div>
+            </div>
+          </div>
+
+          <button class="home-track-whisper" id="homeTrackWhisper" type="button" title="Alternar música de fundo">
+            <span class="whisper-note">♪</span>
+            <span id="npTrackTitle">Where We Used To Be</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ==================== SCREEN: PLAYING ==================== -->
+      <section class="screen" id="s-playing" data-screen="playing">
+        <div class="backdrop">
+          <div class="backdrop-sky"></div>
+          <div class="backdrop-img playing-art"></div>
+          <div class="backdrop-lattice"></div>
+          <div class="backdrop-scrim heavy"></div>
+        </div>
+
+        <div class="playing-center">
+          <div class="playing-crystal">
+            <div class="crystal-ring"></div>
+            <img src="/media/art/crystal.png" alt="" onerror="this.style.display='none';this.parentElement.classList.add('crystal-fallback')">
+            <div class="crystal-glyph" aria-hidden="true"></div>
+          </div>
+          <div class="xc-eyebrow center">
+            <span class="xc-diamond"></span>
+            <span>EM EXECUÇÃO</span>
+            <span class="xc-diamond"></span>
+          </div>
+          <h1 class="playing-title">Xenoblade Chronicles 2</h1>
+          <p class="playing-profile" id="playingProfile">—</p>
+          <p class="playing-note">A música do launcher pausa automaticamente enquanto você joga.</p>
+          <div class="playing-timer" id="playingTimer">00:00:00</div>
+          <div class="playing-actions">
+            <button class="xc-btn primary" id="focusGameBtn" data-f>Voltar ao jogo</button>
+            <button class="xc-btn" id="openSettingsWhilePlaying" data-f>Configurações ao vivo</button>
+            <button class="xc-btn ghost" id="openLogWhilePlaying" data-f>Abrir log</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== SCREEN: SAVES ==================== -->
+      <section class="screen" id="s-saves" data-screen="saves">
+        <div class="backdrop">
+          <div class="backdrop-sky"></div>
+          <div class="backdrop-img menu-art"></div>
+          <div class="backdrop-lattice"></div>
+          <div class="backdrop-scrim sub"></div>
+        </div>
+
+        <div class="page-wrap">
+          <div class="page-head">
+            <div class="page-head-lead">
+              <img class="page-head-icon" src="/media/icon/salvar.png" alt="" onerror="this.style.display='none'">
+              <div>
+                <div class="page-kicker" id="savesKicker">Progresso salvo em Alrest</div>
+                <h2>Seus Saves</h2>
+              </div>
+            </div>
+            <div class="head-actions">
+              <button class="xc-link-btn" id="savesOpenActive" data-f>Abrir pasta de saves</button>
+            </div>
+          </div>
+
+          <div class="xc-divider"><i></i><b></b></div>
+
+          <div class="two-col">
+            <div class="col-main scroll-y">
+              <div class="xc-rail-band active-save-panel" id="activeSaveCard"></div>
+
+              <div class="section-head">
+                <h3>Cópias salvas</h3>
+                <span class="section-count" id="snapshotsCount">0 itens</span>
+              </div>
+              <div class="xc-list" id="snapshotsList"></div>
+            </div>
+
+            <aside class="col-side">
+              <div class="xc-sys-win side-unified" id="saveDropZone">
+                <div class="side-block">
+                  <h3>Importar save</h3>
+                  <p class="panel-desc">Traga um save de um emulador neste PC ou de uma pasta.</p>
+                  <div id="emulatorSavesWrap" class="emu-wrap"></div>
+                  <div class="side-actions">
+                    <button class="xc-btn primary full" id="importSaveFileBtn" data-f>Importar save</button>
+                    <button class="xc-btn ghost full" id="importSaveFolderBtn" data-f>Escolher pasta</button>
+                  </div>
+                </div>
+
+                <div class="side-sep"></div>
+
+                <div class="side-block">
+                  <h3>Exportar save</h3>
+                  <p class="panel-desc">Salve uma cópia do seu progresso atual para usar em outro lugar.</p>
+                  <div class="side-actions">
+                    <button class="xc-btn full" id="exportSaveBtn" data-f>Exportar para pasta</button>
+                  </div>
+                </div>
+
+                <p class="side-footnote">
+                  Tudo o que for substituído recebe um backup automático antes.
+                  <button class="inline-link" id="savesOpenBackups" data-f>Abrir backups</button>
+                </p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== SCREEN: MODS ==================== -->
+      <section class="screen" id="s-mods" data-screen="mods">
+        <div class="backdrop">
+          <div class="backdrop-sky"></div>
+          <div class="backdrop-img menu-art"></div>
+          <div class="backdrop-lattice"></div>
+          <img class="screen-watermark mods-wm" src="/media/art/art_blades.png" alt="" onerror="this.style.display='none'">
+          <div class="backdrop-scrim sub"></div>
+        </div>
+
+        <div class="page-wrap">
+          <div class="page-head">
+            <div class="page-head-lead">
+              <img class="page-head-icon" src="/media/icon/bolsa.png" alt="" onerror="this.style.display='none'">
+              <div>
+                <div class="page-kicker" id="modsKicker">Tradução, pacotes e expansões</div>
+                <h2>Mods &amp; Expansões</h2>
+              </div>
+            </div>
+            <div class="head-actions">
+              <button class="xc-link-btn" id="modsOpenLoc" data-f>Abrir pasta de mods</button>
+            </div>
+          </div>
+
+          <div class="xc-divider"><i></i><b></b></div>
+
+          <div class="two-col">
+            <div class="col-main scroll-y">
+              <div class="section-head">
+                <h3>Tradução &amp; Pacotes</h3>
+                <span class="section-count" id="activePackStatus">Original</span>
+              </div>
+              <div class="pack-gallery" id="packsList"></div>
+
+              <div class="section-head spaced">
+                <h3>Expansões instaladas</h3>
+                <span class="section-count" id="addonsCount"></span>
+              </div>
+              <div class="dlc-grid" id="addonsGrid"></div>
+            </div>
+
+            <aside class="col-side">
+              <div class="xc-sys-win side-panel" id="modDropZone">
+                <h3>Adicionar mod</h3>
+                <p class="panel-desc">Arraste um arquivo .zip ou pasta para esta janela, ou selecione abaixo.</p>
+                <div class="side-actions">
+                  <button class="xc-btn primary full" id="installModZipBtn" data-f>Instalar arquivo .zip</button>
+                  <button class="xc-btn ghost full" id="installModFolderBtn" data-f>Escolher pasta</button>
+                </div>
+                <p class="side-footnote">
+                  Pacotes são mantidos separados e nunca modificam os arquivos originais do jogo.
+                </p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== SCREEN: SETTINGS ==================== -->
+      <section class="screen" id="s-settings" data-screen="settings">
+        <div class="backdrop">
+          <div class="backdrop-sky"></div>
+          <div class="backdrop-img menu-art"></div>
+          <div class="backdrop-lattice"></div>
+          <img class="screen-watermark settings-wm" src="/media/art/art_options.png" alt="" onerror="this.style.display='none'">
+          <div class="backdrop-scrim sub"></div>
+        </div>
+
+        <div class="page-wrap settings-wrap">
+          <div class="page-head">
+            <div class="page-head-lead">
+              <img class="page-head-icon" src="/media/icon/opcoes.png" alt="" onerror="this.style.display='none'">
+              <div>
+                <div class="page-kicker">Preferências do jogo e do launcher</div>
+                <h2>Configurações</h2>
+              </div>
+            </div>
+            <div class="subtabs" id="settingsSubtabs">
+              <button class="stab on" data-stab="video" data-f>
+                <svg class="stab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                <span>Vídeo</span>
+              </button>
+              <button class="stab" data-stab="audio" data-f>
+                <svg class="stab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                <span>Áudio &amp; Tema</span>
+              </button>
+              <button class="stab" data-stab="steam" data-f>
+                <svg class="stab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                <span>Steam &amp; Atalhos</span>
+              </button>
+              <button class="stab" data-stab="system" data-f>
+                <svg class="stab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                <span>Sistema</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="xc-divider"><i></i><b></b></div>
+
+          <div class="settings-body scroll-y" id="settingsBody">
+            <!-- Subtab: Video -->
+            <div class="spane on" data-spane="video">
+              <div class="option-list">
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Perfil gráfico</strong>
+                    <span>Define resolução, anti-aliasing e taxa de quadros de uma vez.</span>
+                  </div>
+                  <div class="opt-ctrl">
+                    <select id="cfgPreset" data-f></select>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Modo de exibição</strong>
+                    <span>Tela cheia sem bordas facilita alternar entre janelas.</span>
+                  </div>
+                  <div class="opt-ctrl">
+                    <select id="iniWindowMode" data-f>
+                      <option value="auto">Automático</option>
+                      <option value="borderless">Tela cheia sem bordas</option>
+                      <option value="fullscreen">Tela cheia exclusiva</option>
+                      <option value="windowed">Janela</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Resolução de saída</strong>
+                    <span>Resolução do monitor ou tamanho da janela.</span>
+                  </div>
+                  <div class="opt-ctrl">
+                    <select id="iniOutputRes" data-f>
+                      <option value="auto">Automático</option>
+                      <option value="desktop">Resolução do monitor</option>
+                      <option value="1280x720">1280 × 720 (720p)</option>
+                      <option value="1920x1080">1920 × 1080 (1080p)</option>
+                      <option value="2560x1440">2560 × 1440 (1440p)</option>
+                      <option value="3840x2160">3840 × 2160 (4K)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Upscaling e anti-aliasing</strong>
+                    <span>NVIDIA DLSS 4.5 / DLAA ou AMD FSR 3.1 automático.</span>
+                  </div>
+                  <div class="opt-ctrl">
+                    <select id="iniUpscale" data-f>
+                      <option value="dlss_native">NVIDIA DLAA 4.5 (Nativo)</option>
+                      <option value="dlss_quality">NVIDIA DLSS 4.5 Qualidade</option>
+                      <option value="dlss_balanced">NVIDIA DLSS 4.5 Equilibrado</option>
+                      <option value="dlss_performance">NVIDIA DLSS 4.5 Desempenho</option>
+                      <option value="fsr3_native">AMD FSR 3.1 Nativo (AA)</option>
+                      <option value="fsr3_quality">AMD FSR 3.1 Qualidade</option>
+                      <option value="fsr3_balanced">AMD FSR 3.1 Equilibrado</option>
+                      <option value="fsr3_performance">AMD FSR 3.1 Desempenho</option>
+                      <option value="auto">Automático (Nativo Switch 2)</option>
+                      <option value="off">Desligado (Original)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Taxa de quadros</strong>
+                    <span id="fpsMonitorHint">Limite dinâmico (cutscenes permanecem em 30 FPS).</span>
+                  </div>
+                  <div class="opt-ctrl">
+                    <select id="cfgCustomFps" data-f>
+                      <option value="30">30 FPS</option>
+                      <option value="60">60 FPS</option>
+                      <option value="90">90 FPS</option>
+                      <option value="120">120 FPS (Recomendado)</option>
+                      <option value="144">144 FPS</option>
+                      <option value="165">165 FPS</option>
+                      <option value="240">240 FPS</option>
+                      <option value="0">Sem limite</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Sincronização vertical (V-Sync)</strong>
+                    <span>Evita cortes horizontais durante movimentos rápidos.</span>
+                  </div>
+                  <div class="opt-ctrl right">
+                    <label class="switch"><input type="checkbox" id="iniVsync"><span class="slider"></span></label>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Exibir contador de FPS</strong>
+                    <span>Mostra a taxa real de quadros em estilo nativo na tela.</span>
+                  </div>
+                  <div class="opt-ctrl right">
+                    <label class="switch"><input type="checkbox" id="iniShowFps"><span class="slider"></span></label>
+                  </div>
+                </div>
+              </div>
+
+              <details class="adv-details">
+                <summary>Melhorias visuais de PC <span class="summary-meta">HDR, iluminação, sombras e água</span></summary>
+                <div class="option-list adv-list">
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Mapeamento HDR (Tonemapping)</strong>
+                      <span>Curva fílmica que preserva nuvens e cores originais.</span>
+                    </div>
+                    <div class="opt-ctrl">
+                      <select id="iniTonemap" data-f>
+                        <option value="native">Original (Switch 2)</option>
+                        <option value="gt7">GT7 Fílmico ICtCp (Recomendado)</option>
+                        <option value="agx">AgX Cinematográfico</option>
+                        <option value="uchimura">Uchimura Clássico</option>
+                        <option value="pbr_neutral">Khronos PBR Neutro</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Bloom físico</strong>
+                      <span>Iluminação equilibrada sem estourar o céu ou cenários.</span>
+                    </div>
+                    <div class="opt-ctrl">
+                      <select id="iniBloomMode" data-f>
+                        <option value="native">Original (Aditivo)</option>
+                        <option value="physical">Físico (Recomendado)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Filtragem de texturas</strong>
+                      <span>Mantém pisos, estradas e cenários distantes mais nítidos.</span>
+                    </div>
+                    <div class="opt-ctrl">
+                      <select id="iniAnisotropy" data-f>
+                        <option value="0">Original</option>
+                        <option value="4">4×</option>
+                        <option value="8">8×</option>
+                        <option value="16">16× (Recomendado)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Sombras de contato</strong>
+                      <span>Projeção solar fina em grama, pedras e arquitetura.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="iniContactShadows"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Oclusão ambiental (GTAO)</strong>
+                      <span>Profundidade natural em cantos e vegetação do cenário.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="iniGtao"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Materiais do cenário</strong>
+                      <span>Textura difusa aprimorada em pedra e madeira (personagens intactos).</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="iniEnvShading"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Cáusticas 3D da água</strong>
+                      <span>Reflexos animados e profundidade óptica em rios e mares.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="iniWaterCaustics"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Iluminação global (SSGI)</strong>
+                      <span>Luz indireta colorida rebatendo nas superfícies do cenário.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="iniSsgi"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Reflexos em tempo real (SSR)</strong>
+                      <span>Reflexos físicos em pisos úmidos, metais e superfícies.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="iniSsr"><span class="slider"></span></label>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="adv-details">
+                <summary>Ajustes avançados &amp; Extras <span class="summary-meta">DLSS 4.5, Amiibo virtual, escala e cache</span></summary>
+                <div class="option-list adv-list">
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Modelo NVIDIA DLSS 4.5</strong>
+                      <span>Preset M (2ª geração) usa FP8 nativo nas RTX 50/40.</span>
+                    </div>
+                    <div class="opt-ctrl">
+                      <select id="iniDlssPreset" data-f>
+                        <option value="auto">Automático (Padrão K/M)</option>
+                        <option value="k">Preset K — Transformer (Estável)</option>
+                        <option value="m">Preset M — Transformer v2 (FP8)</option>
+                        <option value="l">Preset L — Transformer v2 (Ultra)</option>
+                        <option value="j">Preset J — Baixo rastro</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Amiibo virtual</strong>
+                      <span>Use em Sistema › amiibo dentro do jogo (Pyra/Mythra liberam Novo Estilo).</span>
+                    </div>
+                    <div class="opt-ctrl">
+                      <select id="iniAmiibo" data-f>
+                        <option value="0">Desativado</option>
+                        <option value="1">Pyra (Novo Estilo + Bônus)</option>
+                        <option value="2">Mythra (Novo Estilo + Bônus)</option>
+                        <option value="3">Shulk (Xenoblade 1)</option>
+                        <option value="4">Noah (Xenoblade 3)</option>
+                        <option value="5">Mio (Xenoblade 3)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Escala de resolução interna</strong>
+                      <span>Multiplicador interno usado no perfil Personalizado.</span>
+                    </div>
+                    <div class="opt-ctrl">
+                      <select id="iniResolution" data-f>
+                        <option value="1">100% (Switch 2)</option>
+                        <option value="1.3333">133% (768p)</option>
+                        <option value="1.875">188% (1080p / 4K seletivo)</option>
+                        <option value="2">200% (1152p)</option>
+                        <option value="2.5">250% (1440p nativo)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Nitidez e detalhe de texturas</strong>
+                      <span>Ajuste fino pós-upscaling e nível de detalhe.</span>
+                    </div>
+                    <div class="opt-ctrl pair">
+                      <select id="iniSharpness" data-f>
+                        <option value="0">Nitidez 0.0</option>
+                        <option value="0.1">Nitidez 0.1 (Suave)</option>
+                        <option value="0.25">Nitidez 0.25</option>
+                        <option value="0.5">Nitidez 0.5</option>
+                      </select>
+                      <select id="iniMipBias" data-f>
+                        <option value="auto">Detalhe: Auto</option>
+                        <option value="0">Detalhe: Original</option>
+                        <option value="-0.5">Detalhe: -0.5</option>
+                        <option value="-1">Detalhe: -1.0</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Sombras</strong>
+                      <span>Mantém sombras completas do cenário.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="iniShadows"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Modo TV</strong>
+                      <span>Perfil completo de console de mesa em vez do portátil.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="iniDocked"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Escala seletiva 4K</strong>
+                      <span>Eleva a saída nativa para 4K no perfil Personalizado.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="cfg4kScale"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Cache de shaders</strong>
+                      <span id="shaderCacheHint">Pré-compila os shaders na abertura para gameplay suave.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <button class="xc-btn sm ghost" id="rebuildShadersBtn" data-f>Recompilar</button>
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            <!-- Subtab: Audio & Theme -->
+            <div class="spane" data-spane="audio">
+              <div class="audio-section">
+                <div class="section-head">
+                  <h3>Tema da Aegis</h3>
+                  <span class="section-count">Paleta e arte do launcher</span>
+                </div>
+                <div class="theme-swatches" id="themeSwatches">
+                  <button class="swatch" data-theme-pick="aegis" data-f>
+                    <span class="sw-gem" style="--gem-a:#8FE9FF;--gem-b:#2848B8"></span>
+                    <div><strong>Aegis</strong><em>Ciano Cristal</em></div>
+                  </button>
+                  <button class="swatch" data-theme-pick="pyra" data-f>
+                    <span class="sw-gem" style="--gem-a:#FF858F;--gem-b:#B82438"></span>
+                    <div><strong>Pyra</strong><em>Chama Rubi</em></div>
+                  </button>
+                  <button class="swatch" data-theme-pick="mythra" data-f>
+                    <span class="sw-gem" style="--gem-a:#FFE394;--gem-b:#B88824"></span>
+                    <div><strong>Mythra</strong><em>Luz Dourada</em></div>
+                  </button>
+                  <button class="swatch" data-theme-pick="torna" data-f>
+                    <span class="sw-gem" style="--gem-a:#7FFFD4;--gem-b:#1B8A6B"></span>
+                    <div><strong>Torna</strong><em>Esmeralda</em></div>
+                  </button>
+                </div>
+              </div>
+
+              <div class="audio-section audio-spaced">
+                <div class="section-head">
+                  <h3>Trilha sonora</h3>
+                  <span class="section-count">Faixas originais do jogo</span>
+                </div>
+                <div class="track-grid" id="bgmTrackGrid"></div>
+              </div>
+
+              <div class="option-list audio-spaced">
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Música de fundo</strong>
+                    <span>Pausa automaticamente enquanto você joga.</span>
+                  </div>
+                  <div class="opt-ctrl right">
+                    <label class="switch"><input type="checkbox" id="cfgMusicEnabled"><span class="slider"></span></label>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Volume da música</strong>
+                    <span>Nível sonoro da trilha do launcher.</span>
+                  </div>
+                  <div class="opt-ctrl">
+                    <div class="seg-btns vol-ramp" id="soundLevelSeg">
+                      <button class="seg" data-sound="off" data-f><em>Mudo</em><span class="vol-bar b0"></span></button>
+                      <button class="seg" data-sound="low" data-f><em>Baixo</em><span class="vol-bar b1"></span></button>
+                      <button class="seg" data-sound="med" data-f><em>Médio</em><span class="vol-bar b2"></span></button>
+                      <button class="seg" data-sound="high" data-f><em>Alto</em><span class="vol-bar b3"></span></button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Idioma base do jogo</strong>
+                    <span>A tradução em português é gerenciada na aba Mods.</span>
+                  </div>
+                  <div class="opt-ctrl">
+                    <select id="iniLanguage" data-f>
+                      <option value="1">Inglês (US)</option>
+                      <option value="12">Inglês (UK)</option>
+                      <option value="0">Japonês</option>
+                      <option value="5">Espanhol</option>
+                      <option value="2">Francês</option>
+                      <option value="3">Alemão</option>
+                      <option value="4">Italiano</option>
+                      <option value="17">Português (Brasil)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <details class="adv-details">
+                <summary>Comportamento ao iniciar o jogo <span class="summary-meta">Minimizar ou fechar o launcher</span></summary>
+                <div class="option-list adv-list">
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Minimizar ao iniciar o jogo</strong>
+                      <span>Recolhe o launcher automaticamente quando o jogo abre.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="cfgMinimizeLaunch"><span class="slider"></span></label>
+                    </div>
+                  </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Fechar ao iniciar o jogo</strong>
+                      <span>Encerra o launcher assim que a partida começar.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="cfgCloseLaunch"><span class="slider"></span></label>
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            <!-- Subtab: Steam & Integration -->
+            <div class="spane" data-spane="steam">
+              <div class="xc-sys-win steam-panel">
+                <div class="steam-top">
+                  <div>
+                    <h3>Biblioteca da Steam</h3>
+                    <p class="panel-desc">Adiciona Xenoblade Chronicles 2 como jogo não-Steam com capa, banner, hero e ícone oficiais preservando seus outros atalhos.</p>
+                  </div>
+                  <div class="steam-art-preview">
+                    <img src="/media/art/cover.png" alt="Capa" class="st-cover" onerror="this.style.display='none'">
+                    <img src="/media/art/banner.png" alt="Banner" class="st-banner" onerror="this.style.display='none'">
+                  </div>
+                </div>
+                <div id="steamAccountsArea" class="steam-accounts"></div>
+              </div>
+
+              <div class="option-list" style="margin-top:18px">
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Discord Rich Presence</strong>
+                    <span>Mostra sua região, local atual, Driver, Blade e tempo de sessão no Discord.</span>
+                  </div>
+                  <div class="opt-ctrl right">
+                    <label class="switch"><input type="checkbox" id="iniDiscord"><span class="slider"></span></label>
+                  </div>
+                </div>
+
+                <div class="opt-row">
+                  <div class="opt-label">
+                    <strong>Atalho na Área de Trabalho</strong>
+                    <span>Cria um atalho direto com o ícone do Cristal da Aegis.</span>
+                  </div>
+                  <div class="opt-ctrl right">
+                    <button class="xc-btn" id="createDesktopShortcutBtn" data-f>Criar atalho</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Subtab: System -->
+            <div class="spane" data-spane="system">
+              <div class="sys-grid">
+                <div class="sys-left">
+                  <div class="xc-sys-win sys-unified">
+                    <div class="sys-sec">
+                      <div class="panel-inline-head">
+                        <h3>Instalação ativa</h3>
+                        <div class="panel-inline-links">
+                          <button class="inline-link" id="sysOpenInstallBtn" data-f>Abrir pasta</button>
+                          <button class="inline-link" id="sysOpenIniBtn" data-f>Abrir .ini</button>
+                          <button class="inline-link" id="sysRefreshBtn" data-f>Revalidar</button>
+                          <button class="inline-link" id="sysReopenOnboardingBtn" data-f>Refazer guia</button>
+                        </div>
+                      </div>
+                      <p class="sys-path" id="sysInstallPath">—</p>
+                      <div class="install-switcher" id="installSwitcher"></div>
+                    </div>
+
+                    <div class="sys-sep"></div>
+
+                    <div class="sys-sec">
+                      <div class="sys-sublabel">Hardware detectado</div>
+                      <div class="hw-grid" id="hwGrid"></div>
+                    </div>
+
+                    <div class="sys-sep"></div>
+
+                    <div class="sys-sec">
+                      <div class="sys-sublabel">Integridade dos arquivos</div>
+                      <div class="integrity-grid" id="integrityGrid"></div>
+                    </div>
+                  </div>
+
+                  <div class="xc-sys-win setup-panel" id="setupPanel">
+                    <div class="panel-inline-head">
+                      <h3>Instalação Inicial (.nup)</h3>
+                      <span class="xc-status good" id="setupBadge">Pipeline Nativo</span>
+                    </div>
+                    <p class="panel-desc">Extrai o pacote Switch 2 Edition 3.0.1 (.nup), expansões e compila o código nativo (AOT).</p>
+                    <div class="setup-actions">
+                      <button class="xc-btn sm" id="setupPickNupBtn" data-f>Selecionar arquivo .nup…</button>
+                      <button class="xc-btn primary sm hidden" id="setupStartBtn" data-f>Instalar agora</button>
+                      <button class="xc-btn danger sm hidden" id="setupCancelBtn" data-f>Cancelar</button>
+                    </div>
+                    <div class="setup-preflight hidden" id="setupPreflightBox"></div>
+                    <div class="setup-progress hidden" id="setupProgressWrap">
+                      <div class="setup-prog-head">
+                        <strong id="setupProgStage">Preparando…</strong>
+                        <span id="setupProgPct">0%</span>
+                      </div>
+                      <div class="setup-bar"><div class="setup-bar-fill" id="setupProgFill" style="width:0%"></div></div>
+                      <div class="setup-prog-detail" id="setupProgDetail">—</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="xc-sys-win log-panel">
+                  <div class="log-head">
+                    <div class="log-tabs" id="logTabs">
+                      <button class="ltab on" data-log="gameLog" data-f>Jogo</button>
+                      <button class="ltab" data-log="fidelity" data-f>Fidelidade</button>
+                      <button class="ltab" data-log="launcherLog" data-f>Launcher</button>
+                    </div>
+                    <div class="panel-inline-links">
+                      <button class="inline-link" id="openLogFileBtn" data-f>Abrir</button>
+                      <button class="inline-link" id="sysCopyReportBtn" data-f>Copiar diagnóstico</button>
+                    </div>
+                  </div>
+                  <pre class="log-pre" id="logViewer">Carregando logs...</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-footer" id="settingsFooter">
+            <button class="xc-link-btn" id="resetSettingsBtn" data-f>Restaurar padrões</button>
+            <div class="settings-footer-right">
+              <span class="footer-hint">Alterações gráficas aplicam ao vivo</span>
+              <button class="xc-btn primary" id="saveSettingsBtn" data-f>Salvar alterações</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== INTERACTIVE ONBOARDING WIZARD ==================== -->
+      <section class="ob-overlay" id="onboardingOverlay" aria-hidden="true">
+        <div class="backdrop">
+          <div class="backdrop-sky"></div>
+          <div class="backdrop-img ob-art"></div>
+          <div class="backdrop-lattice"></div>
+          <div class="backdrop-scrim ob-scrim"></div>
+        </div>
+
+        <div class="ob-shell">
+          <div class="ob-stepper" id="obStepper" role="tablist">
+            <button class="ob-step on" data-ob-step="0" type="button" data-f>
+              <span class="ob-step-gem">1</span>
+              <span>Instalação</span>
+            </button>
+            <span class="ob-step-line"></span>
+            <button class="ob-step" data-ob-step="1" type="button" data-f>
+              <span class="ob-step-gem">2</span>
+              <span>Perfil Gráfico</span>
+            </button>
+            <span class="ob-step-line"></span>
+            <button class="ob-step" data-ob-step="2" type="button" data-f>
+              <span class="ob-step-gem">3</span>
+              <span>Idioma &amp; Nomes</span>
+            </button>
+            <span class="ob-step-line"></span>
+            <button class="ob-step" data-ob-step="3" type="button" data-f>
+              <span class="ob-step-gem">4</span>
+              <span>Seu Save</span>
+            </button>
+            <span class="ob-step-line"></span>
+            <button class="ob-step" data-ob-step="4" type="button" data-f>
+              <span class="ob-step-gem">5</span>
+              <span>Controle &amp; Dicas</span>
+            </button>
+          </div>
+
+          <div class="ob-body">
+            <!-- Step 1: Welcome & Guided .nup Install -->
+            <div class="ob-pane on" data-ob-pane="0" id="obPaneInstall">
+              <!-- Mode A: Ready to Play Welcome -->
+              <div class="ob-welcome-grid" id="obInstallReadyView">
+                <div class="ob-welcome-left">
+                  <div class="ob-logo-wrap">
+                    <img class="game-logo logo-base" src="/media/art/logo_official.png" alt="Xenoblade Chronicles 2" onerror="this.style.display='none';this.parentElement.classList.add('logo-missing')">
+                    <img class="game-logo logo-torna" src="/media/art/logo_torna.png" alt="Xenoblade Chronicles 2: Torna" onerror="this.style.display='none';this.parentElement.classList.add('logo-missing')">
+                    <div class="logo-wordmark sm" aria-hidden="true">
+                      <span class="lw-title">XENOBLADE CHRONICLES 2</span>
+                      <span class="lw-sub">PC EDITION</span>
+                    </div>
+                  </div>
+                  <div class="xc-eyebrow" style="margin-top:18px">
+                    <span class="xc-diamond"></span>
+                    <span>BEM-VINDO A ALREST · PC EDITION</span>
+                  </div>
+                  <h2 class="ob-hero-title">Vamos preparar tudo para sua aventura</h2>
+                  <p class="ob-hero-desc">Em menos de um minuto configuramos o perfil gráfico ideal para o seu PC, escolhemos a tradução e os nomes que você prefere, conferimos seus saves e testamos seu controle — sem deixar nenhuma dúvida.</p>
+                  <div class="ob-roadmap-trail">
+                    <span>Perfil pela GPU</span><i class="xc-diamond"></i>
+                    <span>Tradução PT-BR / JP</span><i class="xc-diamond"></i>
+                    <span>Saves &amp; Emuladores</span><i class="xc-diamond"></i>
+                    <span>Controle ao vivo</span>
+                  </div>
+                  <div class="ob-welcome-sublink">
+                    <button class="xc-link-btn" id="obShowNupInstallerBtn" type="button" data-f>Precisa instalar ou extrair de um arquivo .nup?</button>
+                  </div>
+                </div>
+
+                <div class="xc-sys-win ob-ready-card">
+                  <div class="panel-inline-head">
+                    <div class="panel-title-ico">
+                      <img src="/media/icon/cristal.png" alt="" onerror="this.style.display='none'">
+                      <h3>Instalação verificada</h3>
+                    </div>
+                    <span class="xc-status good">Pronto para jogar</span>
+                  </div>
+                  <div class="ob-check-list" id="obReadyChecklist"></div>
+                  <div class="ob-ready-foot">
+                    <span class="ob-path-mini" id="obReadyPath">—</span>
+                    <button class="inline-link" id="obReadyPickFolderBtn" type="button" data-f>Trocar pasta</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Mode B: Missing Install / Guided .nup Pipeline -->
+              <div class="ob-nup-grid hidden" id="obInstallNupView">
+                <div class="ob-nup-main">
+                  <div class="xc-eyebrow">
+                    <span class="xc-diamond"></span>
+                    <span>INSTALAÇÃO GUIADA · SWITCH 2 EDITION 3.0.1</span>
+                  </div>
+                  <h2 class="ob-title">Instale o jogo em um só passo</h2>
+                  <p class="ob-sub">Selecione ou arraste o arquivo <strong>.nup</strong> da Switch 2 Edition 3.0.1. O launcher valida a integridade SHA-256, extrai o jogo e as expansões e compila o código nativo automaticamente — você só faz isso uma vez.</p>
+
+                  <button class="ob-dropzone" id="obPickNupBtn" type="button" data-f>
+                    <img class="ob-drop-crest" src="/media/icon/cristal.png" alt="" onerror="this.style.display='none'">
+                    <strong id="obDropTitle">Arraste o arquivo .nup aqui ou clique para selecionar</strong>
+                    <span id="obDropSub">Aceita o pacote completo Switch 2 Edition 3.0.1 (jogo base + Torna + DLCs + vozes JP)</span>
+                  </button>
+
+                  <div class="ob-nup-preflight hidden" id="obNupPreflight"></div>
+
+                  <div class="ob-nup-actions">
+                    <button class="xc-btn primary hidden" id="obStartInstallBtn" type="button" data-f>Iniciar instalação agora</button>
+                    <button class="xc-btn danger hidden" id="obCancelInstallBtn" type="button" data-f>Cancelar</button>
+                    <button class="xc-link-btn hidden" id="obBackToReadyBtn" type="button" data-f>← Voltar para resumo da instalação</button>
+                  </div>
+
+                  <div class="ob-nup-progress hidden" id="obNupProgress">
+                    <div class="ob-prog-top">
+                      <strong id="obProgStage">Preparando…</strong>
+                      <span id="obProgPct">0%</span>
+                    </div>
+                    <div class="setup-bar ob-bar"><div class="setup-bar-fill" id="obProgFill" style="width:0%"></div></div>
+                    <div class="ob-prog-milestones" id="obProgMilestones">
+                      <span data-ms="1">1. Verificação</span>
+                      <span data-ms="2">2. Jogo Base</span>
+                      <span data-ms="3">3. Metadados</span>
+                      <span data-ms="4">4. Expansões</span>
+                      <span data-ms="5">5. Runtime</span>
+                      <span data-ms="6">6. Código AOT</span>
+                    </div>
+                    <details class="ob-tech-details">
+                      <summary>Ver detalhes técnicos</summary>
+                      <div class="ob-tech-line" id="obProgDetail">—</div>
+                    </details>
+                  </div>
+                </div>
+
+                <aside class="xc-sys-win ob-nup-side">
+                  <div class="panel-title-ico">
+                    <svg class="panel-title-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+                    <h3>Verificação do ambiente</h3>
+                  </div>
+                  <div class="ob-check-list" id="obNupChecklist"></div>
+                  <div class="ob-nup-side-foot">
+                    <p>Já tem a pasta do jogo pronta em outro disco?</p>
+                    <button class="xc-btn ghost sm full" id="obPickExistingFolderBtn" type="button" data-f>Selecionar pasta existente…</button>
+                  </div>
+                </aside>
+              </div>
+            </div>
+
+            <!-- Step 2: Smart Hardware Detection & Graphic Preset -->
+            <div class="ob-pane" data-ob-pane="1" id="obPaneGraphics">
+              <div class="ob-pane-head">
+                <div class="page-head-lead">
+                  <img class="ob-head-icon" src="/media/icon/tela.png" alt="" onerror="this.style.display='none'">
+                  <div>
+                    <div class="xc-eyebrow"><span class="xc-diamond"></span><span>ETAPA 2 DE 5 · DESEMPENHO E IMAGEM</span></div>
+                    <h2 class="ob-title">Perfil gráfico recomendado para o seu PC</h2>
+                  </div>
+                </div>
+                <div class="ob-hw-inline" id="obHwPills"></div>
+              </div>
+
+              <div class="xc-rail-band ob-rec-banner" id="obRecBanner"></div>
+              <div class="ob-preset-grid" id="obPresetGrid"></div>
+              <p class="ob-footnote">Você pode alternar o perfil a qualquer hora na tela inicial ou ajustar upscaling, FPS, HDR10, Reflex e iluminação <strong>ao vivo</strong> sem fechar o jogo.</p>
+            </div>
+
+            <!-- Step 3: Language, Translation & Naming Style -->
+            <div class="ob-pane" data-ob-pane="2" id="obPaneLanguage">
+              <div class="ob-pane-head">
+                <div class="page-head-lead">
+                  <img class="ob-head-icon" src="/media/icon/livros.png" alt="" onerror="this.style.display='none'">
+                  <div>
+                    <div class="xc-eyebrow"><span class="xc-diamond"></span><span>ETAPA 3 DE 5 · TEXTO E LOCALIZAÇÃO</span></div>
+                    <h2 class="ob-title">Idioma e estilo de nomes</h2>
+                  </div>
+                </div>
+                <span class="xc-status" id="obActivePackBadge">Verificando…</span>
+              </div>
+
+              <div class="ob-lang-warn hidden" id="obLangNotReadyBanner">
+                Instale o jogo na Etapa 1 para ativar os pacotes de tradução. Você pode ver as opções abaixo desde já.
+              </div>
+              <div class="ob-lang-grid" id="obLangGrid"></div>
+              <div class="xc-rail-band ob-voice-bar" id="obVoiceBar"></div>
+            </div>
+
+            <!-- Step 4: Save Import & Automatic Backup Guarantee -->
+            <div class="ob-pane" data-ob-pane="3" id="obPaneSaves">
+              <div class="ob-pane-head">
+                <div class="page-head-lead">
+                  <img class="ob-head-icon" src="/media/icon/salvar.png" alt="" onerror="this.style.display='none'">
+                  <div>
+                    <div class="xc-eyebrow"><span class="xc-diamond"></span><span>ETAPA 4 DE 5 · SEU PROGRESSO</span></div>
+                    <h2 class="ob-title">Comece do zero ou traga seu save</h2>
+                  </div>
+                </div>
+                <span class="xc-status good">Backup automático SHA-256 ativo</span>
+              </div>
+
+              <div class="ob-saves-grid">
+                <div class="ob-saves-left">
+                  <div class="xc-rail-band ob-active-save" id="obActiveSaveCard"></div>
+                  <div class="xc-sys-win ob-emu-panel">
+                    <div class="panel-inline-head">
+                      <h3>Saves detectados em emuladores</h3>
+                      <span class="section-count" id="obEmuCount">Verificando…</span>
+                    </div>
+                    <div class="ob-emu-list" id="obEmuList"></div>
+                  </div>
+                </div>
+
+                <aside class="ob-saves-right">
+                  <div class="xc-sys-win side-unified">
+                    <div class="side-block">
+                      <h3>Importar manualmente</h3>
+                      <p class="panel-desc">Traga um <code>bf2savefile.sav</code> ou a pasta completa de outro PC, Switch ou emulador — você também pode arrastar o arquivo direto para esta janela.</p>
+                      <div class="side-actions">
+                        <button class="xc-btn primary full" id="obImportFileBtn" type="button" data-f>Escolher arquivo .sav</button>
+                        <button class="xc-btn ghost full" id="obImportFolderBtn" type="button" data-f>Escolher pasta de save</button>
+                      </div>
+                    </div>
+
+                    <div class="side-sep"></div>
+
+                    <div class="side-block">
+                      <div class="xc-eyebrow"><span class="xc-diamond"></span><span>PROTEÇÃO CONTRA PERDA</span></div>
+                      <p class="panel-desc" style="margin-top:8px">Antes de qualquer substituição ou importação, o launcher cria automaticamente uma cópia verificada do seu save anterior. Você nunca perde progresso por acidente.</p>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+
+            <!-- Step 5: Live Gamepad Tester & Zero-Doubt Tips -->
+            <div class="ob-pane" data-ob-pane="4" id="obPaneControls">
+              <div class="ob-pane-head">
+                <div class="page-head-lead">
+                  <img class="ob-head-icon" src="/media/icon/opcoes.png" alt="" onerror="this.style.display='none'">
+                  <div>
+                    <div class="xc-eyebrow"><span class="xc-diamond"></span><span>ETAPA 5 DE 5 · PRONTO PARA ALREST</span></div>
+                    <h2 class="ob-title">Teste seu controle e confira os atalhos</h2>
+                  </div>
+                </div>
+                <button class="xc-btn sm ghost" id="obPadLockBtn" type="button" data-f>Travar navegação p/ testar B e D-Pad</button>
+              </div>
+
+              <div class="ob-controls-grid">
+                <div class="xc-sys-win ob-pad-panel">
+                  <div class="ob-pad-head">
+                    <div>
+                      <strong id="obPadTitle">Aguardando controle…</strong>
+                      <span id="obPadSub">Conecte Xbox, DualSense ou Switch Pro e pressione qualquer botão</span>
+                    </div>
+                    <span class="xc-status warn" id="obPadStateBadge">Sem sinal</span>
+                  </div>
+
+                  <div class="ob-pad-stage">
+                    <svg class="ob-pad-svg" id="obPadSvg" viewBox="0 0 440 230" aria-label="Diagrama interativo do controle">
+                      <defs>
+                        <linearGradient id="gpBodyGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stop-color="#224298" stop-opacity="0.88"/>
+                          <stop offset="50%" stop-color="#173072" stop-opacity="0.92"/>
+                          <stop offset="100%" stop-color="#0E1F4F" stop-opacity="0.96"/>
+                        </linearGradient>
+                      </defs>
+                      <!-- Triggers & Bumpers -->
+                      <g class="gp-el" data-gp-btn="6"><rect x="64" y="14" width="66" height="16" rx="3"/><text x="97" y="25">LT</text></g>
+                      <g class="gp-el" data-gp-btn="7"><rect x="310" y="14" width="66" height="16" rx="3"/><text x="343" y="25">RT</text></g>
+                      <g class="gp-el" data-gp-btn="4"><rect x="56" y="36" width="84" height="18" rx="3"/><text x="98" y="49">LB</text></g>
+                      <g class="gp-el" data-gp-btn="5"><rect x="300" y="36" width="84" height="18" rx="3"/><text x="342" y="49">RB</text></g>
+
+                      <!-- Controller Silhouette -->
+                      <path class="gp-body" d="M98 58 H342 C376 58 398 84 404 128 L412 184 C415 206 396 218 378 212 C358 205 344 184 328 168 H112 C96 184 82 205 62 212 C44 218 25 206 28 184 L36 128 C42 84 64 58 98 58 Z"/>
+
+                      <!-- Center Buttons -->
+                      <g class="gp-el" data-gp-btn="8"><rect x="172" y="96" width="32" height="16" rx="2"/><text x="188" y="107">−</text></g>
+                      <g class="gp-el" data-gp-btn="9"><rect x="236" y="96" width="32" height="16" rx="2"/><text x="252" y="107">+</text></g>
+
+                      <!-- Left Stick -->
+                      <g class="gp-stick-wrap" data-gp-btn="10">
+                        <circle class="gp-stick-ring" cx="114" cy="108" r="24"/>
+                        <circle class="gp-stick-dot" id="gpStickL" cx="114" cy="108" r="10"/>
+                      </g>
+
+                      <!-- D-Pad -->
+                      <g class="gp-el" data-gp-btn="12"><rect x="150" y="128" width="18" height="18" rx="2"/><text x="159" y="140">▲</text></g>
+                      <g class="gp-el" data-gp-btn="13"><rect x="150" y="164" width="18" height="18" rx="2"/><text x="159" y="176">▼</text></g>
+                      <g class="gp-el" data-gp-btn="14"><rect x="132" y="146" width="18" height="18" rx="2"/><text x="141" y="158">◀</text></g>
+                      <g class="gp-el" data-gp-btn="15"><rect x="168" y="146" width="18" height="18" rx="2"/><text x="177" y="158">▶</text></g>
+                      <rect class="gp-dpad-center" x="150" y="146" width="18" height="18"/>
+
+                      <!-- Right Stick -->
+                      <g class="gp-stick-wrap" data-gp-btn="11">
+                        <circle class="gp-stick-ring" cx="272" cy="154" r="24"/>
+                        <circle class="gp-stick-dot" id="gpStickR" cx="272" cy="154" r="10"/>
+                      </g>
+
+                      <!-- Face Buttons -->
+                      <g class="gp-el" data-gp-btn="3"><circle cx="330" cy="86" r="13"/><text id="gpLbl3" x="330" y="90">Y</text></g>
+                      <g class="gp-el" data-gp-btn="2"><circle cx="304" cy="110" r="13"/><text id="gpLbl2" x="304" y="114">X</text></g>
+                      <g class="gp-el" data-gp-btn="1"><circle cx="356" cy="110" r="13"/><text id="gpLbl1" x="356" y="114">B</text></g>
+                      <g class="gp-el" data-gp-btn="0"><circle cx="330" cy="134" r="13"/><text id="gpLbl0" x="330" y="138">A</text></g>
+                    </svg>
+                  </div>
+
+                  <div class="ob-pad-readout" id="obPadReadout">
+                    Dica: você também pode navegar por todo o launcher usando o controle (D-Pad, A/B e LB/RB).
+                  </div>
+                </div>
+
+                <div class="xc-sys-win ob-tips-win">
+                  <div class="ob-tip-row">
+                    <span class="ob-tip-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></span>
+                    <div>
+                      <strong>Menu Nativo de PC dentro do jogo</strong>
+                      <p>Abra <b>Sistema › Opções › Configurações de PC</b> dentro do jogo para ajustar resolução, DLSS/FSR/XeSS, HDR10, Reflex e sombras sem sair da partida — ou mude ao vivo pelo launcher.</p>
+                    </div>
+                  </div>
+
+                  <div class="ob-tip-row">
+                    <span class="ob-tip-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"></path></svg></span>
+                    <div>
+                      <strong>Atalhos úteis no teclado</strong>
+                      <div class="ob-kbd-grid">
+                        <span><kbd>F11</kbd> / <kbd>Alt+Enter</kbd> Tela cheia</span>
+                        <span><kbd>F3</kbd> Captura de tela</span>
+                        <span><kbd>F4</kbd> Limite de FPS</span>
+                        <span><kbd>F1</kbd> Ajuda de teclas</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="ob-tip-row">
+                    <span class="ob-tip-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></span>
+                    <div>
+                      <strong>Primeira abertura (Cache de Shaders)</strong>
+                      <p id="obShaderTip">Na primeira vez que o jogo abrir, os shaders serão pré-compilados por alguns segundos. Acontece uma única vez para garantir gameplay liso sem engasgos.</p>
+                    </div>
+                  </div>
+
+                  <div class="ob-tip-row">
+                    <span class="ob-tip-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></span>
+                    <div>
+                      <strong>Arraste e solte + Amiibo virtual</strong>
+                      <p id="obAmiiboTip">Arraste saves <code>.sav</code> ou mods <code>.zip</code> direto para esta janela. Em <b>Configurações › Vídeo</b> você também pode ativar Amiibos virtuais (Pyra/Mythra) ao vivo.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <footer class="ob-footer">
+            <div class="ob-foot-left">
+              <button class="xc-btn ghost" id="obPrevBtn" type="button" data-f>← Anterior</button>
+              <button class="xc-link-btn" id="obSkipBtn" type="button" data-f>Pular guia</button>
+            </div>
+            <div class="ob-foot-right">
+              <button class="xc-btn ghost hidden" id="obFinishTourBtn" type="button" data-f>Concluir + Tour rápido</button>
+              <button class="xc-btn primary" id="obNextBtn" type="button" data-f>Começar configuração →</button>
+            </div>
+          </footer>
+        </div>
+      </section>
+
+      <!-- ==================== INTERACTIVE SPOTLIGHT TOUR ==================== -->
+      <div class="tour-overlay" id="tourOverlay" aria-hidden="true">
+        <div class="tour-spotlight" id="tourSpotlight">
+          <i class="sp-pin tl"></i><i class="sp-pin tr"></i><i class="sp-pin bl"></i><i class="sp-pin br"></i>
+        </div>
+        <div class="xc-sys-win tour-card" id="tourCard">
+          <div class="tour-head">
+            <div class="xc-eyebrow">
+              <span class="xc-diamond"></span>
+              <span id="tourStepTag">DICA 1 DE 5</span>
+            </div>
+            <button class="xc-link-btn tour-close" id="tourSkipBtn" type="button" data-f>Fechar</button>
+          </div>
+          <h3 class="tour-title" id="tourTitle">—</h3>
+          <p class="tour-desc" id="tourDesc">—</p>
+          <div class="tour-foot">
+            <div class="tour-dots" id="tourDots"></div>
+            <div class="tour-actions">
+              <button class="xc-btn sm ghost" id="tourPrevBtn" type="button" data-f>Anterior</button>
+              <button class="xc-btn sm primary" id="tourNextBtn" type="button" data-f>Próximo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Global Drag Overlay -->
+      <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-box">
+          <div class="drop-diamond"></div>
+          <h2 id="dropTitle">Solte para importar</h2>
+          <p id="dropDesc">Arquivo de save, pacote .zip de tradução/mod ou pacote .nup do jogo</p>
+        </div>
+      </div>
+
+      <!-- Portal for custom XC2 dropdown menus (never clipped by scroll or window edges) -->
+      <div class="xc-dropdown-portal" id="xcSelectPortal" role="listbox"></div>
+
+      <!-- Toast Notification -->
+      <div class="toast" id="toast"></div>
+
+      <!-- Gamepad-only Hint Bar (hidden during mouse/keyboard use) -->
+      <div class="input-hint" id="inputHint"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
