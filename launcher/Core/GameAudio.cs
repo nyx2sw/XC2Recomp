@@ -135,6 +135,8 @@ public sealed class GameAudio
             try
             {
                 GetBgmOgg(preferredBgmId);
+                foreach (var sfxId in SfxEvents.Keys)
+                    GetSfxWav(sfxId);
             }
             catch (Exception ex) { LauncherLog.Write("audio warmup: " + ex.Message); }
         });

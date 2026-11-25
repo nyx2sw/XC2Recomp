@@ -26,6 +26,7 @@ public sealed class Backend
     InstallStatus install;
     HardwareInfo hardware;
     GameAudio audio;
+    GameArtwork artwork;
     bool playing;
     string activeLaunchProfile = "";
     DateTime playingSince;
@@ -41,6 +42,7 @@ public sealed class Backend
         install = GameInstall.Inspect(installDir, projectRoot, computeHashes: false);
         hardware = SystemProbe.Probe(install.InstallDir);
         audio = new GameAudio(install.RomfsDir, LauncherPaths.MediaCacheDir);
+        artwork = new GameArtwork(install.RomfsDir, LauncherPaths.MediaCacheDir);
 
         BindContentProviders();
         runner.Exited += OnGameExited;
@@ -49,6 +51,8 @@ public sealed class Backend
     void BindContentProviders()
     {
         content.VisualKitDir = install.VisualKitDir;
+        content.ArtProvider = k => artwork.GetArtPng(k);
+        content.IconProvider = n => artwork.GetIconPng(n);
         content.BgmProvider = id => audio.GetBgmOgg(id);
         content.SfxProvider = id => audio.GetSfxWav(id);
         content.PackThumbProvider = ResolvePackThumbnail;
@@ -117,6 +121,7 @@ public sealed class Backend
     void HandleReady()
     {
         audio.WarmupAsync(config.MusicTrack);
+        artwork.WarmupAsync();
         playing = GameRunner.IsGameRunning();
         PushFullState(includeHashes: false);
         // Compute binary SHA-256 hashes asynchronously so initial render is instant
@@ -337,7 +342,7 @@ public sealed class Backend
                 var exe = Environment.ProcessPath ?? Path.Combine(projectRoot, "Xenoblade2Launcher.exe");
                 var ico = install.VisualKitDir != null
                     ? Path.Combine(install.VisualKitDir, "01_atalhos", "xc2_pc_cristal.ico")
-                    : null;
+                    : artwork.EnsureCrystalIcon();
                 var lnk = SteamIntegration.CreateDesktopShortcut(exe, ico);
                 Toast("Atalho criado na Área de Trabalho.");
                 break;
@@ -567,11 +572,12 @@ public sealed class Backend
         string startDir = Path.GetDirectoryName(targetExe) ?? install.InstallDir;
         string? ico = install.VisualKitDir != null
             ? Path.Combine(install.VisualKitDir, "01_atalhos", "xc2_pc_cristal.ico")
-            : null;
+            : artwork.EnsureCrystalIcon();
+        string? artDir = install.VisualKitDir ?? artwork.EnsureSteamArtDir();
         string launchOpts = launchViaLauncher ? "" : GameRunner.BuildPlan(install, config, hardware).Arguments;
 
         var (_, artCount) = SteamIntegration.AddOrUpdateShortcut(
-            acc.ShortcutsPath, acc.GridDir, targetExe, startDir, ico, install.VisualKitDir, launchOpts);
+            acc.ShortcutsPath, acc.GridDir, targetExe, startDir, ico, artDir, launchOpts);
 
         PushSteam();
         Toast($"Adicionado à Steam ({acc.PersonaName}) com {artCount} artes oficiais.");
@@ -600,8 +606,10 @@ public sealed class Backend
         install = GameInstall.Inspect(dir, projectRoot, computeHashes: true);
         hardware = SystemProbe.Probe(install.InstallDir);
         audio = new GameAudio(install.RomfsDir, LauncherPaths.MediaCacheDir);
+        artwork = new GameArtwork(install.RomfsDir, LauncherPaths.MediaCacheDir);
         BindContentProviders();
         audio.WarmupAsync(config.MusicTrack);
+        artwork.WarmupAsync();
 
         PushFullState(includeHashes: true);
         Toast("Pasta de instalação atualizada.");
@@ -721,8 +729,10 @@ public sealed class Backend
                     install = GameInstall.Inspect(resolvedTarget, projectRoot, computeHashes: true);
                     hardware = SystemProbe.Probe(install.InstallDir);
                     audio = new GameAudio(install.RomfsDir, LauncherPaths.MediaCacheDir);
+                    artwork = new GameArtwork(install.RomfsDir, LauncherPaths.MediaCacheDir);
                     BindContentProviders();
                     audio.WarmupAsync(config.MusicTrack);
+                    artwork.WarmupAsync();
                 }
                 else
                 {
@@ -872,6 +882,7 @@ public sealed class Backend
     void Toast(string text, string? sfx = null, bool isError = false)
     {
         var o = new JsonObject { ["t"] = "toast", ["text"] = text, ["error"] = isError };
+        if (!string.IsNullOrEmpty(sfx)) o["sfx"] = sfx;
         Send(o);
     }
 }

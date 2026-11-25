@@ -1,7 +1,8 @@
 # Builds, tests and publishes Xenoblade2Launcher.exe (single self-contained net10.0-windows exe)
 param(
     [switch]$SkipPublish,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [string]$IconPath = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,7 +31,14 @@ if ($SkipPublish) {
 
 $pubDir = Join-Path $here 'out\win-x64'
 Write-Host "==> Publishing self-contained Xenoblade2Launcher.exe..." -ForegroundColor Cyan
-dotnet publish (Join-Path $here 'App\XC2.Launcher.csproj') -c Release -r win-x64 -o $pubDir -v minimal
+$pubArgs = @('publish', (Join-Path $here 'App\XC2.Launcher.csproj'), '-c', 'Release', '-r', 'win-x64', '-o', $pubDir, '-v', 'minimal')
+if ($IconPath) {
+    if (-not (Test-Path $IconPath)) { throw "Icon file not found: $IconPath" }
+    $resolvedIcon = (Resolve-Path $IconPath).Path
+    $pubArgs += "-p:ApplicationIcon=$resolvedIcon"
+    Write-Host "    Embedding icon: $resolvedIcon" -ForegroundColor DarkCyan
+}
+& dotnet @pubArgs
 if ($LASTEXITCODE -ne 0) { throw "Publish failed ($LASTEXITCODE)" }
 
 $builtExe = Join-Path $pubDir 'Xenoblade2Launcher.exe'

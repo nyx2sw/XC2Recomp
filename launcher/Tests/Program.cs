@@ -109,6 +109,71 @@ try
         }
     });
 
+    Check("GameArtwork extracts official banners, logos, icons, Steam art, and Core Crystal ICO directly from bf2.ard", () =>
+    {
+        var romfs = Path.Combine(projectRoot, "games", "xenoblade2_data", "romfs");
+        if (!File.Exists(Path.Combine(romfs, "bf2.ard"))) return;
+
+        var cache = Path.Combine(tempRoot, "art_cache");
+        var art = new GameArtwork(romfs, cache);
+        Assert(art.IsAvailable, "bf2.arh + bf2.ard available");
+
+        (int W, int H) AssertValidPng((byte[] Data, string Mime)? res, string label)
+        {
+            Assert(res != null && res.Value.Mime == "image/png" && res.Value.Data.Length > 256, $"{label} PNG generated");
+            byte[] d = res!.Value.Data;
+            Assert(d[0] == 0x89 && d[1] == 0x50 && d[2] == 0x4E && d[3] == 0x47, $"{label} PNG signature");
+            int w = BinaryPrimitives.ReadInt32BigEndian(d.AsSpan(16, 4));
+            int h = BinaryPrimitives.ReadInt32BigEndian(d.AsSpan(20, 4));
+            Assert(w > 0 && h > 0, $"{label} dimensions {w}x{h}");
+            return (w, h);
+        }
+
+        var (kw, kh) = AssertValidPng(art.GetArtPng("keyart_bg"), "keyart_bg");
+        Assert(kw == 1920 && kh > 1000, $"keyart_bg size {kw}x{kh}");
+
+        var (lw, lh) = AssertValidPng(art.GetArtPng("logo_official"), "logo_official");
+        Assert(lw > 600 && lh < lw * 0.55, $"logo_official ribbon trimmed ({lw}x{lh})");
+
+        AssertValidPng(art.GetArtPng("logo_torna"), "logo_torna");
+        AssertValidPng(art.GetArtPng("torna_bg"), "torna_bg");
+        AssertValidPng(art.GetArtPng("menu_bg"), "menu_bg");
+        AssertValidPng(art.GetArtPng("save_rex"), "save_rex");
+        AssertValidPng(art.GetArtPng("dlc_blades"), "dlc_blades");
+
+        var (cw, ch) = AssertValidPng(art.GetArtPng("crystal"), "crystal");
+        Assert(cw == 256 && ch == 256, $"crystal 256x256, got {cw}x{ch}");
+
+        var (covW, covH) = AssertValidPng(art.GetArtPng("cover"), "cover");
+        Assert(covW == 600 && covH == 900, $"cover 600x900, got {covW}x{covH}");
+
+        var (banW, banH) = AssertValidPng(art.GetArtPng("banner"), "banner");
+        Assert(banW == 920 && banH == 430, $"banner 920x430, got {banW}x{banH}");
+
+        var (herW, herH) = AssertValidPng(art.GetArtPng("hero"), "hero");
+        Assert(herW == 1920 && herH == 620, $"hero 1920x620, got {herW}x{herH}");
+
+        foreach (var iconName in new[] { "cristal", "salvar", "opcoes", "bolsa", "tela", "livros" })
+        {
+            var (iw, ih) = AssertValidPng(art.GetIconPng(iconName), $"icon/{iconName}");
+            Assert(iw == 128 && ih == 128, $"icon/{iconName} 128x128, got {iw}x{ih}");
+        }
+
+        var icoPath = art.EnsureCrystalIcon();
+        Assert(!string.IsNullOrEmpty(icoPath) && File.Exists(icoPath), "crystal ICO generated");
+        byte[] icoBytes = File.ReadAllBytes(icoPath!);
+        Assert(BinaryPrimitives.ReadUInt16LittleEndian(icoBytes.AsSpan(0, 2)) == 0 &&
+               BinaryPrimitives.ReadUInt16LittleEndian(icoBytes.AsSpan(2, 2)) == 1 &&
+               BinaryPrimitives.ReadUInt16LittleEndian(icoBytes.AsSpan(4, 2)) == 7,
+               "ICO header valid with 7 PNG sizes");
+
+        var steamDir = art.EnsureSteamArtDir();
+        Assert(!string.IsNullOrEmpty(steamDir) &&
+               File.Exists(Path.Combine(steamDir!, @"03_biblioteca\capa_600x900.png")) &&
+               File.Exists(Path.Combine(steamDir!, @"03_biblioteca\banner_920x430.png")),
+               "Steam grid art materialized in cache");
+    });
+
     Check("SteamIntegration VDF round-trip preserves foreign shortcuts byte-for-byte", () =>
     {
         // Build a synthetic shortcuts.vdf with 1 foreign game

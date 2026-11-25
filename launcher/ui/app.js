@@ -116,14 +116,19 @@ fitWindow();
   requestAnimationFrame(tick);
 })();
 
-// ==================== Web Audio Engine (BGM Only — Clean & Quiet UI) ====================
+// ==================== Web Audio Engine (BGM + Subtle Native XC2 UI SFX) ====================
 const AudioEngine = (() => {
   let ctx = null;
   let bgmGain = null;
   let bgmSource = null;
   let currentTrackId = null;
   let bgmLoading = false;
+  let sfxWarmed = false;
   const bgmCache = new Map();
+  const sfxCache = new Map();
+  const sfxInFlight = new Map();
+  const sfxMissing = new Set();
+  const lastSfxTs = new Map();
 
   function ensureCtx() {
     if (!ctx) {
@@ -144,6 +149,79 @@ const AudioEngine = (() => {
       case 'high': return 0.78;
       default: return 0.22;
     }
+  }
+
+  function loadSfx(id) {
+    if (sfxCache.has(id)) return Promise.resolve(sfxCache.get(id));
+    if (sfxMissing.has(id)) return Promise.resolve(null);
+    if (sfxInFlight.has(id)) return sfxInFlight.get(id);
+
+    const p = (async () => {
+      try {
+        const res = await fetch(`/media/sfx/${id}.wav`);
+        if (!res.ok) { sfxMissing.add(id); return null; }
+        const arr = await res.arrayBuffer();
+        const ac = ensureCtx();
+        const buf = await ac.decodeAudioData(arr);
+        sfxCache.set(id, buf);
+        return buf;
+      } catch {
+        return null;
+      } finally {
+        sfxInFlight.delete(id);
+      }
+    })();
+    sfxInFlight.set(id, p);
+    return p;
+  }
+
+  function playSfx(id, gainScale = 1.0) {
+    if (!id || !state.config || state.config.soundLevel === 'off' || state.playing.running) return;
+    if (!state.install?.hasRomfs) return;
+    const nowMs = performance.now();
+    const minGap = id === 'cursor' ? 45 : 70;
+    if (nowMs - (lastSfxTs.get(id) || 0) < minGap) return;
+    lastSfxTs.set(id, nowMs);
+
+    const vol = levelGain(state.config.soundLevel) * 0.40 * gainScale;
+    if (vol <= 0.001) return;
+
+    const ac = ensureCtx();
+    const cached = sfxCache.get(id);
+    if (cached) {
+      playBuffer(ac, cached, vol);
+      return;
+    }
+    loadSfx(id).then(buf => {
+      if (buf && state.config?.soundLevel !== 'off' && !state.playing.running) {
+        playBuffer(ac, buf, vol);
+      }
+    });
+  }
+
+  function playBuffer(ac, buf, vol) {
+    try {
+      const src = ac.createBufferSource();
+      const g = ac.createGain();
+      g.gain.value = vol;
+      src.buffer = buf;
+      src.connect(g);
+      g.connect(ac.destination);
+      src.start(0);
+    } catch {}
+  }
+
+  function warmupSfx() {
+    if (sfxWarmed || !state.install?.hasRomfs) return;
+    sfxWarmed = true;
+    for (const id of ['cursor', 'decide', 'open', 'cancel', 'play', 'error']) {
+      loadSfx(id);
+    }
+  }
+
+  function resetMediaCache() {
+    sfxMissing.clear();
+    sfxWarmed = false;
   }
 
   function stopBgm(fadeSec = 0.45) {
@@ -220,16 +298,58 @@ const AudioEngine = (() => {
     bgmLoading = false;
   }
 
-  return { syncBgm, stopBgm };
+  return { syncBgm, stopBgm, playSfx, warmupSfx, resetMediaCache };
 })();
+
+let lastMediaRomfs = false;
+function refreshRuntimeMedia() {
+  const v = Date.now();
+  AudioEngine.resetMediaCache();
+
+  // Refresh CSS background layers so freshly extracted art appears without restarting the launcher
+  let st = $('mediaBustStyle');
+  if (!st) {
+    st = document.createElement('style');
+    st.id = 'mediaBustStyle';
+    document.head.appendChild(st);
+  }
+  st.textContent = `
+    .backdrop-img.home-art, .backdrop-img.playing-art, .backdrop-img.ob-art {
+      background-image: url('/media/art/keyart_bg.png?v=${v}') !important;
+    }
+    html[data-theme="torna"] .backdrop-img.home-art, html[data-theme="torna"] .backdrop-img.ob-art {
+      background-image: url('/media/art/torna_bg.png?v=${v}'), url('/media/art/keyart_bg.png?v=${v}') !important;
+    }
+    .backdrop-img.menu-art {
+      background-image: url('/media/art/menu_bg.png?v=${v}') !important;
+    }
+  `;
+
+  document.querySelectorAll('img').forEach(img => {
+    const raw = img.getAttribute('src') || '';
+    if (!raw.startsWith('/media/art/') && !raw.startsWith('/media/icon/')) return;
+    const base = raw.split('?')[0];
+    img.style.display = '';
+    img.parentElement?.classList.remove('logo-missing', 'crystal-fallback');
+    img.setAttribute('src', `${base}?v=${v}`);
+  });
+
+  AudioEngine.warmupSfx();
+  AudioEngine.syncBgm();
+}
+
+window.addEventListener('pointerdown', () => AudioEngine.warmupSfx(), { once: true, passive: true });
+window.addEventListener('keydown', () => AudioEngine.warmupSfx(), { once: true, passive: true });
 
 // ==================== Toast ====================
 let toastTimer = null;
-function showToast(text, isError = false) {
+function showToast(text, isError = false, sfx = null) {
   const el = $('toast');
   el.textContent = text;
   el.classList.toggle('err', !!isError);
   el.classList.add('on');
+  if (isError) AudioEngine.playSfx('error', 0.85);
+  else if (sfx) AudioEngine.playSfx(sfx, 0.75);
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('on'), 3800);
 }
@@ -401,10 +521,12 @@ function goScreen(name) {
       name = 'playing';
     }
   }
+  const changed = state.screen !== name;
   state.screen = name;
   closePresetMenu();
   closeHelpMenu();
   XCSelect.close();
+  if (changed && name !== 'playing') AudioEngine.playSfx('open', 0.72);
 
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === name));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('on', t.dataset.nav === (name === 'playing' ? 'home' : name)));
@@ -421,8 +543,10 @@ function goScreen(name) {
 }
 
 function goSettingsSubtab(stab) {
+  const changed = state.subtab !== stab;
   state.subtab = stab;
   XCSelect.close();
+  if (changed) AudioEngine.playSfx('cursor', 0.75);
   document.querySelectorAll('.stab').forEach(b => b.classList.toggle('on', b.dataset.stab === stab));
   document.querySelectorAll('.spane').forEach(p => p.classList.toggle('on', p.dataset.spane === stab));
   $('settingsFooter')?.classList.toggle('hidden', stab === 'system');
@@ -530,6 +654,7 @@ function renderHome() {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         closePresetMenu();
+        AudioEngine.playSfx('decide', 0.78);
         cmd('preset.set', { id: btn.dataset.preset });
       });
     });
@@ -594,6 +719,7 @@ function renderSaves() {
       </div>
     `;
     $('createBackupBtn').addEventListener('click', () => {
+      AudioEngine.playSfx('decide', 0.8);
       cmd('saves.backup', { label: $('backupLabelInput').value.trim() });
     });
   } else {
@@ -731,6 +857,7 @@ function renderMods() {
 
   $('packsList').querySelectorAll('[data-pack]').forEach(btn => {
     btn.addEventListener('click', () => {
+      AudioEngine.playSfx('decide', 0.8);
       cmd('mods.activate', { id: btn.dataset.pack });
     });
   });
@@ -885,6 +1012,7 @@ function renderSettings() {
 
   $('bgmTrackGrid').querySelectorAll('[data-track]').forEach(btn => {
     btn.addEventListener('click', () => {
+      AudioEngine.playSfx('decide', 0.78);
       cmd('music.track', { id: btn.dataset.track });
     });
   });
@@ -1068,6 +1196,7 @@ function openOnboarding(step = 0) {
 
 function closeOnboarding(markComplete = false) {
   if (!state.onboarding.open && !markComplete) return;
+  if (state.onboarding.open && !markComplete) AudioEngine.playSfx('cancel', 0.72);
   state.onboarding.open = false;
   state.onboarding.padTestLock = false;
   state.onboarding.forceNupView = false;
@@ -1082,6 +1211,9 @@ function closeOnboarding(markComplete = false) {
 
 function setOnboardingStep(idx) {
   const clamped = Math.max(0, Math.min(OB_STEP_COUNT - 1, idx));
+  if (clamped !== state.onboarding.step) {
+    AudioEngine.playSfx(clamped > state.onboarding.step ? 'decide' : 'cancel', 0.72);
+  }
   state.onboarding.step = clamped;
   if (clamped !== 4) state.onboarding.padTestLock = false;
   renderOnboarding();
@@ -1719,6 +1851,7 @@ function startTour(step = 0) {
 
 function closeTour(returnHome = true) {
   if (!state.tour.open) return;
+  AudioEngine.playSfx('cancel', 0.72);
   state.tour.open = false;
   const ov = $('tourOverlay');
   ov?.classList.remove('open');
@@ -1835,6 +1968,7 @@ $('obPickNupBtn')?.addEventListener('click', () => cmd('setup.pickNup'));
 $('obStartInstallBtn')?.addEventListener('click', () => {
   const pre = state.setup?.preflight;
   if (!pre?.nup?.nupPath) return;
+  AudioEngine.playSfx('decide', 0.85);
   const forceAot = $('obForceAot')?.checked ?? false;
   cmd('setup.start', {
     nupPath: pre.nup.nupPath,
@@ -1842,7 +1976,7 @@ $('obStartInstallBtn')?.addEventListener('click', () => {
     forceRecompileAot: forceAot
   });
 });
-$('obCancelInstallBtn')?.addEventListener('click', () => cmd('setup.cancel'));
+$('obCancelInstallBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cancel', 0.8); cmd('setup.cancel'); });
 $('obReadyPickFolderBtn')?.addEventListener('click', () => cmd('system.pickInstall'));
 $('obPickExistingFolderBtn')?.addEventListener('click', () => cmd('system.pickInstall'));
 $('obImportFileBtn')?.addEventListener('click', () => cmd('saves.import.pickFile'));
@@ -1875,10 +2009,12 @@ document.querySelectorAll('[data-nav]').forEach(el => {
 $('playBtn').addEventListener('click', () => {
   closePresetMenu();
   if (state.install && !state.install.isReadyToPlay) {
+    AudioEngine.playSfx('open', 0.8);
     state.onboarding.forceNupView = true;
     openOnboarding(0);
     return;
   }
+  AudioEngine.playSfx('play', 0.95);
   cmd('play');
 });
 
@@ -1887,6 +2023,7 @@ function stepPreset(delta) {
   const idx = state.presets.findIndex(p => p.id === state.config.preset);
   const next = state.presets[((idx < 0 ? 0 : idx) + delta + state.presets.length) % state.presets.length];
   closePresetMenu();
+  AudioEngine.playSfx('cursor', 0.7);
   cmd('preset.set', { id: next.id });
 }
 
@@ -1926,16 +2063,27 @@ document.querySelectorAll('[data-stab]').forEach(b => {
 });
 
 document.querySelectorAll('[data-theme-pick]').forEach(b => {
-  b.addEventListener('click', () => cmd('theme.set', { accent: b.dataset.themePick }));
+  b.addEventListener('click', () => {
+    AudioEngine.playSfx('decide', 0.8);
+    cmd('theme.set', { accent: b.dataset.themePick });
+  });
 });
 
 document.querySelectorAll('[data-sound]').forEach(b => {
-  b.addEventListener('click', () => cmd('sound.set', { level: b.dataset.sound }));
+  b.addEventListener('click', () => {
+    const lvl = b.dataset.sound;
+    cmd('sound.set', { level: lvl });
+    if (lvl !== 'off') setTimeout(() => AudioEngine.playSfx('cursor', 0.85), 40);
+  });
 });
 
-$('cfgMusicEnabled').addEventListener('change', () => cmd('music.toggle'));
+$('cfgMusicEnabled').addEventListener('change', () => {
+  AudioEngine.playSfx('cursor', 0.75);
+  cmd('music.toggle');
+});
 
 $('saveSettingsBtn').addEventListener('click', () => {
+  AudioEngine.playSfx('decide', 0.85);
   cmd('settings.save', {
     ini: {
       'Display.window_mode': $('iniWindowMode').value,
@@ -1985,6 +2133,7 @@ $('setupPickNupBtn')?.addEventListener('click', () => cmd('setup.pickNup'));
 $('setupStartBtn')?.addEventListener('click', () => {
   const pre = state.setup?.preflight;
   if (!pre?.nup?.nupPath) return;
+  AudioEngine.playSfx('decide', 0.85);
   const forceAot = $('setupForceAot')?.checked ?? false;
   cmd('setup.start', {
     nupPath: pre.nup.nupPath,
@@ -1992,7 +2141,7 @@ $('setupStartBtn')?.addEventListener('click', () => {
     forceRecompileAot: forceAot
   });
 });
-$('setupCancelBtn')?.addEventListener('click', () => cmd('setup.cancel'));
+$('setupCancelBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cancel', 0.8); cmd('setup.cancel'); });
 
 $('sysCopyReportBtn').addEventListener('click', async () => {
   const report = [
@@ -2117,7 +2266,10 @@ function moveFocus(dir) {
     const score = primary + perp * 2.4;
     if (score < bestScore) { bestScore = score; best = el; }
   }
-  if (best) setFocus(best);
+  if (best) {
+    setFocus(best);
+    AudioEngine.playSfx('cursor', 0.55);
+  }
 }
 
 const navOrder = ['home', 'saves', 'mods', 'settings'];
@@ -2243,6 +2395,7 @@ if (window.chrome && window.chrome.webview) {
     if (!m) return;
 
     if (m.t === 'state') {
+      const prevRomfs = lastMediaRomfs;
       for (const k of ['config', 'install', 'hardware', 'recommendation', 'presets', 'launchPlan', 'bgmTracks', 'saves', 'mods', 'ini', 'steam', 'setup', 'playing', 'logs']) {
         if (m[k] !== undefined) state[k] = m[k];
       }
@@ -2252,6 +2405,14 @@ if (window.chrome && window.chrome.webview) {
         if (state.screen !== 'playing' && state.screen !== 'settings') goScreen('playing');
       }
       renderAll();
+
+      const nowRomfs = !!state.install?.hasRomfs;
+      if (nowRomfs && !prevRomfs) {
+        lastMediaRomfs = true;
+        refreshRuntimeMedia();
+      } else if (!nowRomfs) {
+        lastMediaRomfs = false;
+      }
 
       if (!state.onboarding.autoOpenedOnce && !state.onboarding.open && state.config && state.install && !state.playing.running) {
         state.onboarding.autoOpenedOnce = true;
@@ -2263,10 +2424,11 @@ if (window.chrome && window.chrome.webview) {
       state.setupProgress = m;
       renderSetup();
       if (state.onboarding.open) renderOnboardingInstall();
+      if (m.isDone && !m.isError) refreshRuntimeMedia();
     } else if (m.t === 'go' && m.s) {
       goScreen(m.s);
     } else if (m.t === 'toast') {
-      showToast(m.text, m.error);
+      showToast(m.text, m.error, m.sfx || null);
     } else if (m.t === 'max') {
       $('winMax').innerHTML = m.on
         ? `<svg viewBox="0 0 12 12"><rect x="2" y="3.5" width="6.5" height="6.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 3.5V2h6v6H8.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`

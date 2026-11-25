@@ -10,6 +10,7 @@
     <PathMap>$(MSBuildProjectDirectory)=/src/launcher/Core</PathMap>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="BCnEncoder.Net" Version="2.3.0" />
     <EmbeddedResource Include="Data\presence_names.tsv" LogicalName="XC2.Core.Data.presence_names.tsv" />
   </ItemGroup>
 </Project>

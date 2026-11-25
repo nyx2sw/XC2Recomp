@@ -152,14 +152,37 @@ public sealed class WinHost
         }
     }
 
-    void OnWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+    async void OnWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
         var path = new Uri(e.Request.Uri).AbsolutePath;
-        var got = content.Get(path);
-        e.Response = got is { } g
-            ? env!.CreateWebResourceResponse(new MemoryStream(g.Data), 200, "OK",
-                $"Content-Type: {g.Mime}\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *")
-            : env!.CreateWebResourceResponse(null, 404, "Not Found", "Cache-Control: no-store");
+        if (!path.StartsWith("/media/", StringComparison.OrdinalIgnoreCase))
+        {
+            var got = content.Get(path);
+            e.Response = got is { } g
+                ? env!.CreateWebResourceResponse(new MemoryStream(g.Data), 200, "OK",
+                    $"Content-Type: {g.Mime}\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *")
+                : env!.CreateWebResourceResponse(null, 404, "Not Found", "Cache-Control: no-store");
+            return;
+        }
+
+        var deferral = e.GetDeferral();
+        try
+        {
+            var got = await Task.Run(() => content.Get(path));
+            e.Response = got is { } g
+                ? env!.CreateWebResourceResponse(new MemoryStream(g.Data), 200, "OK",
+                    $"Content-Type: {g.Mime}\r\nCache-Control: no-store\r\nAccess-Control-Allow-Origin: *")
+                : env!.CreateWebResourceResponse(null, 404, "Not Found", "Cache-Control: no-store");
+        }
+        catch (Exception ex)
+        {
+            LauncherLog.Write($"resource {path}: {ex.Message}");
+            try { e.Response = env!.CreateWebResourceResponse(null, 500, "Error", "Cache-Control: no-store"); } catch { }
+        }
+        finally
+        {
+            deferral.Complete();
+        }
     }
 
     void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)

@@ -18,6 +18,8 @@ public sealed class Content
 
     public Func<string, (byte[] Data, string Mime)?>? BgmProvider;
     public Func<string, (byte[] Data, string Mime)?>? SfxProvider;
+    public Func<string, (byte[] Data, string Mime)?>? ArtProvider;
+    public Func<string, (byte[] Data, string Mime)?>? IconProvider;
     public Func<string, (byte[] Data, string Mime)?>? PackThumbProvider;
     public string? VisualKitDir { get; set; }
 
@@ -75,24 +77,27 @@ public sealed class Content
                 return (ms.ToArray(), MimeOf(path));
             }
 
-            if (path.StartsWith("media/art/", StringComparison.OrdinalIgnoreCase) && VisualKitDir != null)
+            if (path.StartsWith("media/art/", StringComparison.OrdinalIgnoreCase))
             {
                 var key = Path.GetFileNameWithoutExtension(path["media/art/".Length..]);
-                if (ArtMap.TryGetValue(key, out var rel))
+                if (VisualKitDir != null && ArtMap.TryGetValue(key, out var rel))
                 {
                     var fp = Path.GetFullPath(Path.Combine(VisualKitDir, rel));
                     if (File.Exists(fp)) return (File.ReadAllBytes(fp), "image/png");
                 }
-                return null;
+                return ArtProvider?.Invoke(key);
             }
 
-            if (path.StartsWith("media/icon/", StringComparison.OrdinalIgnoreCase) && VisualKitDir != null)
+            if (path.StartsWith("media/icon/", StringComparison.OrdinalIgnoreCase))
             {
                 var name = Path.GetFileNameWithoutExtension(path["media/icon/".Length..]);
                 var safe = new string(name.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
-                var fp = Path.Combine(VisualKitDir, "05_icones_nativos", "png_128", safe + ".png");
-                if (File.Exists(fp)) return (File.ReadAllBytes(fp), "image/png");
-                return null;
+                if (VisualKitDir != null)
+                {
+                    var fp = Path.Combine(VisualKitDir, "05_icones_nativos", "png_128", safe + ".png");
+                    if (File.Exists(fp)) return (File.ReadAllBytes(fp), "image/png");
+                }
+                return IconProvider?.Invoke(safe);
             }
 
             if (path.StartsWith("media/pack-thumb/", StringComparison.OrdinalIgnoreCase) && PackThumbProvider != null)

@@ -23,7 +23,7 @@ A native Windows PC launcher, First-Run `.nup` setup pipeline, and runtime exten
   - Hardware-aware preset recommendations (NVIDIA DLSS 4.5 / DLAA, AMD FSR 3.1, Intel XeSS, 60–240 FPS, up to 4K).
   - Live `xenoblade2.ini` hot-reload while playing.
   - Safe atomic save backups, Switch emulator save import, mod/localization manager, and byte-exact Steam non-Steam shortcut integration.
-  - Pure managed C# BGM/SFX reader directly from the player's own extracted `romfs` (zero copyrighted audio embedded).
+  - Pure managed C# runtime media extractor reading artwork (`bf2.arh`/`bf2.ard`), BGM (`.nop`), and UI SFX (`system.pck`) directly from the player's own extracted `romfs` (zero copyrighted media embedded in the repository).
 - **Native Runtime Extensions** (`extensions/`):
   - `native_ui.dll`: In-game PC Settings extension (`System → Options`), gracefully preserving original menus when custom layout assets are absent.
   - `presence.dll`: Discord Rich Presence showing live region, landmark, Driver, Blade, and session timer.

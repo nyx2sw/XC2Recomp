@@ -5,6 +5,7 @@ param(
     [string]$SnxRoot,
     [string]$OutDir = "",
     [string]$DllSourceDir = "",
+    [string]$IconPath = "",
     [string]$Strip = "llvm-strip",
     [switch]$Zip
 )
@@ -18,7 +19,9 @@ if (-not (Test-Path $snxExe)) { throw "Built scarletnx.exe not found at $snxExe"
 
 # 1. Build Launcher
 Write-Host "==> Building Xenoblade2Launcher.exe..." -ForegroundColor Cyan
-& (Join-Path $repoRoot 'launcher\build.ps1')
+$launcherBuildArgs = @{}
+if ($IconPath) { $launcherBuildArgs['IconPath'] = $IconPath }
+& (Join-Path $repoRoot 'launcher\build.ps1') @launcherBuildArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $launcherExe = Join-Path $repoRoot 'launcher\out\win-x64\Xenoblade2Launcher.exe'
