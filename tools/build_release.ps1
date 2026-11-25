@@ -40,13 +40,7 @@ $rtDir = Join-Path $OutDir 'runtime'
 Copy-Item $launcherExe (Join-Path $OutDir 'Xenoblade2Launcher.exe') -Force
 
 $dstExe = Join-Path $rtDir 'xenoblade2.exe'
-if (Get-Command $Strip -ErrorAction SilentlyContinue) {
-    # --strip-debug removes DWARF debug paths while keeping PE symbol metadata intact
-    & $Strip --strip-debug -o $dstExe $snxExe
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-} else {
-    Copy-Item $snxExe $dstExe -Force
-}
+Copy-Item $snxExe $dstExe -Force
 
 $openSourceDlls = @(
     'libc++.dll', 'libffi-8.dll', 'libiconv-2.dll', 'libLLVM-23.dll',

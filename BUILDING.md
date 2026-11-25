@@ -26,7 +26,7 @@ cmake --build ../snx_build --target scarletnx -j
 ctest --test-dir ../snx_build -R "shader_direct|state_decode|hactool" --output-on-failure
 ```
 
-*(Note: Build with `-DCMAKE_BUILD_TYPE=Release` and `-ffile-prefix-map` instead of running `llvm-strip --strip-all` post-link — stripping PE sections from an unsigned Windows executable can trigger Windows Defender heuristic false positives.)*
+*(Note: Strip debug symbols at link time with `-Wl,-S` or `-DCMAKE_BUILD_TYPE=Release` instead of running `llvm-strip` post-link — post-link `llvm-strip` on unsigned Windows PE executables can trigger Windows Defender heuristic false positives.)*
 
 ---
 
