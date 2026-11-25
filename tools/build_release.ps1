@@ -40,7 +40,13 @@ $rtDir = Join-Path $OutDir 'runtime'
 Copy-Item $launcherExe (Join-Path $OutDir 'Xenoblade2Launcher.exe') -Force
 
 $dstExe = Join-Path $rtDir 'xenoblade2.exe'
-Copy-Item $snxExe $dstExe -Force
+if (Get-Command $Strip -ErrorAction SilentlyContinue) {
+    # --strip-debug removes DWARF debug paths while keeping PE symbol metadata intact
+    & $Strip --strip-debug -o $dstExe $snxExe
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+} else {
+    Copy-Item $snxExe $dstExe -Force
+}
 
 $openSourceDlls = @(
     'libc++.dll', 'libffi-8.dll', 'libiconv-2.dll', 'libLLVM-23.dll',
@@ -67,6 +73,7 @@ foreach ($lic in @('LICENSE', 'LICENSE.apache', 'NOTICE')) {
     Copy-Item (Join-Path $repoRoot $lic) (Join-Path $rtDir "licenses\$lic") -Force
     Copy-Item (Join-Path $repoRoot $lic) (Join-Path $OutDir $lic) -Force
 }
+Copy-Item (Join-Path $repoRoot 'README.md') (Join-Path $OutDir 'README.md') -Force
 
 Write-Host "==> Portable release staged at $OutDir" -ForegroundColor Green
 if ($Zip) {
