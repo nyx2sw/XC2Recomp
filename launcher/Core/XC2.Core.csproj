@@ -3,7 +3,7 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>XC2.Core</RootNamespace>
     <AssemblyName>XC2.Core</AssemblyName>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
