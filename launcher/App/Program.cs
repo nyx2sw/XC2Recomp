@@ -13,6 +13,13 @@ internal static class Program
         bool devTools = args.Any(a => a.Equals("--dev", StringComparison.OrdinalIgnoreCase));
         bool shotMode = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("XC2_LAUNCHER_SHOT"));
 
+        // If relaunched right after self-update, wait for the previous launcher instance to release the mutex
+        int prevPid = ParseIntArg(args, "--updated-from");
+        string? updatedVersion = ParseStringArg(args, "--updated-version");
+        if (prevPid > 0)
+            LauncherUpdater.WaitForPreviousProcess(prevPid);
+        LauncherUpdater.CleanupPreviousBinary(Environment.ProcessPath);
+
         // Single-instance guard (bypassed only during automated screenshot QA if needed)
         using var mutex = new Mutex(true, @"Local\XC2PCEditionLauncherSingleInstance", out bool isFirst);
         if (!isFirst && !shotMode)
@@ -33,13 +40,29 @@ internal static class Program
         var config = LauncherConfig.Load();
         var content = new Content();
         var host = new WinHost(content, LauncherPaths.WebViewDataDir, devTools);
-        var backend = new Backend(host, content, projectRoot, config);
+        var backend = new Backend(host, content, projectRoot, config, updatedVersion);
 
         host.Message += backend.OnMessage;
-        LauncherLog.Write($"startup: root={projectRoot}, webview2={WinHost.RuntimeVersion()}");
+        LauncherLog.Write($"startup: v{LauncherUpdater.CurrentVersion}, root={projectRoot}, webview2={WinHost.RuntimeVersion()}");
 
         host.Run();
         return 0;
+    }
+
+    static int ParseIntArg(string[] args, string flag)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+            if (args[i].Equals(flag, StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out var v))
+                return v;
+        return 0;
+    }
+
+    static string? ParseStringArg(string[] args, string flag)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+            if (args[i].Equals(flag, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(args[i + 1]))
+                return args[i + 1];
+        return null;
     }
 
     static void FocusExistingLauncher()

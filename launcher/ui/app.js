@@ -27,9 +27,12 @@ const state = {
   dlssProgress: null,
   shaderBuild: { running: false },
   shaderProgress: null,
+  updater: { currentVersion: '0.2.0', checking: false, applying: false, result: null },
+  updateProgress: null,
   playing: { running: false },
   logs: {},
   focusedEl: null,
+  windowFocused: document.hasFocus(),
   gamepadMode: false,
   playingTimerInterval: null,
   playingStartMs: 0,
@@ -613,6 +616,16 @@ function renderChrome() {
     whisper.classList.toggle('muted', muted);
     $('npTrackTitle').textContent = trackName;
   }
+
+  const upBtn = $('topbarUpdateBtn');
+  const upRes = state.updater?.result;
+  if (upBtn) {
+    const showUp = !!(upRes?.hasUpdate) && !state.playing?.running;
+    upBtn.classList.toggle('hidden', !showUp);
+    if (showUp && $('topbarUpdateLabel')) {
+      $('topbarUpdateLabel').textContent = `Nova versão ${upRes.latestTag || ''}`.trim();
+    }
+  }
 }
 
 function renderHome() {
@@ -958,6 +971,7 @@ function renderSettings() {
   $('cfg4kScale').checked = !!cfg.custom4kSelectiveScale;
   $('cfgMinimizeLaunch').checked = !!cfg.minimizeOnLaunch;
   $('cfgCloseLaunch').checked = !!cfg.closeAfterLaunch;
+  if ($('cfgAutoCheckUpdates')) $('cfgAutoCheckUpdates').checked = cfg.autoCheckUpdates !== false;
   $('cfgMusicEnabled').checked = !!cfg.musicEnabled;
 
   if ($('saveSettingsBtn')) {
@@ -1179,25 +1193,121 @@ function renderSystem() {
     `;
   }
 
+  renderUpdater();
   renderSetup();
   renderLogs();
+}
+
+function renderUpdater() {
+  const u = state.updater || { currentVersion: '0.2.0', checking: false, applying: false, result: null };
+  const res = u.result;
+  const badge = $('updateVersionBadge');
+  const desc = $('updateStatusDesc');
+  const notes = $('updateNotesBox');
+  const applyBtn = $('updateApplyBtn');
+  const checkBtn = $('updateCheckBtn');
+  const cancelBtn = $('updateCancelBtn');
+  const progWrap = $('updateProgressWrap');
+  if (!badge || !desc) return;
+
+  const busy = !!u.checking || !!u.applying;
+  const gameRunning = !!state.playing?.running;
+  const curVer = u.currentVersion || '0.2.0';
+
+  if (u.applying) {
+    badge.textContent = `Atualizando → ${res?.latestTag || ''}`.trim();
+    badge.className = 'xc-status warn';
+  } else if (u.checking) {
+    badge.textContent = 'Verificando…';
+    badge.className = 'xc-status';
+  } else if (res?.hasUpdate) {
+    badge.textContent = `v${curVer} → ${res.latestTag}`;
+    badge.className = 'xc-status warn';
+  } else {
+    badge.textContent = `v${curVer} · Atualizado`;
+    badge.className = 'xc-status good';
+  }
+
+  if (u.applying) {
+    desc.textContent = `Baixando e aplicando ${res?.latestTag || 'nova versão'}. Seus saves, ROM, DLCs e configurações permanecem intactos.`;
+  } else if (u.checking) {
+    desc.textContent = 'Consultando releases oficiais em github.com/nyx2sw/XC2Recomp...';
+  } else if (res?.hasUpdate) {
+    const sz = res.assetSizeBytes > 0 ? ` (${fmtBytes(res.assetSizeBytes)})` : '';
+    desc.textContent = `Nova versão ${res.latestTag} disponível${sz}. Atualiza launcher, runtime, traduções e hints AOT preservando seus arquivos do jogo e saves.`;
+  } else if (res?.error) {
+    desc.textContent = res.error;
+  } else if (res) {
+    desc.textContent = `Você já está na versão mais recente (v${curVer}).`;
+  } else {
+    desc.textContent = 'Verifique novas versões para receber correções de GPU, desempenho, traduções e melhorias automaticamente sem baixar tudo de novo.';
+  }
+
+  if (notes) {
+    const body = (res?.hasUpdate && res.releaseNotes) ? res.releaseNotes.trim() : '';
+    notes.classList.toggle('hidden', !body);
+    if (body) notes.textContent = body;
+  }
+
+  if (applyBtn) {
+    applyBtn.classList.toggle('hidden', !(res?.hasUpdate) || !!u.applying);
+    applyBtn.disabled = busy || gameRunning || !!state.setup?.running || !!state.dlss?.running || !!state.shaderBuild?.running;
+    applyBtn.textContent = res?.latestTag ? `Atualizar para ${res.latestTag}` : 'Atualizar agora';
+  }
+  if (checkBtn) {
+    checkBtn.classList.toggle('hidden', !!u.applying);
+    checkBtn.disabled = busy;
+    checkBtn.textContent = u.checking ? 'Verificando…' : 'Verificar atualizações';
+  }
+  cancelBtn?.classList.toggle('hidden', !u.applying);
+
+  const p = state.updateProgress;
+  if (progWrap) {
+    const showProg = !!u.applying || (p && (!p.isDone || p.isError));
+    progWrap.classList.toggle('hidden', !showProg);
+    if (showProg && p) {
+      $('updateProgStage').textContent = p.stage || 'Atualizando…';
+      $('updateProgPct').textContent = `${Math.round(p.percent || 0)}%`;
+      $('updateProgFill').style.width = `${Math.max(0, Math.min(100, p.percent || 0))}%`;
+      $('updateProgFill').classList.toggle('err', !!p.isError);
+      $('updateProgDetail').textContent = p.detail || '';
+    }
+  }
 }
 
 function renderSetup() {
   const s = state.setup || { running: false, preflight: null };
   const pre = s.preflight;
+  const inst = state.install;
   const pickBtn = $('setupPickNupBtn');
   const startBtn = $('setupStartBtn');
+  const aotBtn = $('aotRecompileBtn');
   const cancelBtn = $('setupCancelBtn');
   const preBox = $('setupPreflightBox');
   const progWrap = $('setupProgressWrap');
   const badge = $('setupBadge');
+  const desc = $('setupPanelDesc');
   if (!pickBtn || !preBox) return;
 
-  pickBtn.disabled = !!s.running;
+  pickBtn.disabled = !!s.running || !!state.playing?.running;
+  if (aotBtn) {
+    const canAot = !!(inst?.hasExefsForAot) && !s.running;
+    aotBtn.classList.toggle('hidden', !canAot);
+    aotBtn.disabled = !!s.running || !!state.playing?.running || !!state.updater?.applying;
+    const hintsNewer = !!(inst?.hintsNewerThanAot);
+    aotBtn.classList.toggle('primary', hintsNewer);
+    aotBtn.classList.toggle('ghost', !hintsNewer);
+    aotBtn.textContent = hintsNewer ? 'Recompilar AOT (novos hints)' : 'Recompilar código AOT';
+  }
+  if (desc && inst?.hasExefsForAot) {
+    const cnt = inst.hintsCount ? `${Number(inst.hintsCount).toLocaleString('pt-BR')} hints` : '';
+    desc.textContent = inst.hintsNewerThanAot
+      ? `Novos hints AOT detectados (${cnt}). Clique em Recompilar AOT para acelerar minigames/áreas novas sem precisar do arquivo .nup.`
+      : `Extrai o pacote Switch 2 Edition 3.0.1 (.nup) ou recompila o código nativo AOT${cnt ? ` (${cnt})` : ''}.`;
+  }
   if (badge) {
-    badge.textContent = s.running ? 'Em andamento' : (pre?.readyToRun ? 'Validado' : 'Pipeline Nativo');
-    badge.className = 'xc-status ' + (s.running ? 'warn' : (pre && !pre.readyToRun ? 'warn' : 'good'));
+    badge.textContent = s.running ? 'Em andamento' : (inst?.hintsNewerThanAot ? 'Novos hints AOT' : (pre?.readyToRun ? 'Validado' : 'Pipeline Nativo'));
+    badge.className = 'xc-status ' + (s.running || inst?.hintsNewerThanAot ? 'warn' : (pre && !pre.readyToRun ? 'warn' : 'good'));
   }
 
   if (pre && pre.nup) {
@@ -2312,7 +2422,8 @@ $('saveSettingsBtn').addEventListener('click', () => {
       customXc2Fps: parseInt($('cfgCustomFps').value, 10),
       custom4kSelectiveScale: $('cfg4kScale').checked,
       minimizeOnLaunch: $('cfgMinimizeLaunch').checked,
-      closeAfterLaunch: $('cfgCloseLaunch').checked
+      closeAfterLaunch: $('cfgCloseLaunch').checked,
+      autoCheckUpdates: $('cfgAutoCheckUpdates')?.checked ?? true
     }
   });
 });
@@ -2327,6 +2438,16 @@ $('dlssCancelBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cance
 $('createDesktopShortcutBtn').addEventListener('click', () => { AudioEngine.playSfx('decide', 0.8); cmd('shortcut.desktop'); });
 
 // System controls (inside Settings -> Sistema)
+$('topbarUpdateBtn')?.addEventListener('click', () => {
+  AudioEngine.playSfx('open', 0.8);
+  goScreen('settings');
+  goSettingsSubtab('system');
+});
+$('updateCheckBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cursor', 0.8); cmd('update.check'); });
+$('updateApplyBtn')?.addEventListener('click', () => { AudioEngine.playSfx('decide', 0.85); cmd('update.apply'); });
+$('updateCancelBtn')?.addEventListener('click', () => { AudioEngine.playSfx('cancel', 0.8); cmd('update.cancel'); });
+$('updateReleasesBtn')?.addEventListener('click', () => cmd('update.openReleases'));
+$('aotRecompileBtn')?.addEventListener('click', () => { AudioEngine.playSfx('decide', 0.85); cmd('aot.recompile'); });
 $('sysRefreshBtn').addEventListener('click', () => cmd('refresh'));
 $('sysOpenInstallBtn').addEventListener('click', () => cmd('open.folder', { what: 'install' }));
 $('sysOpenIniBtn').addEventListener('click', () => cmd('open.ini'));
@@ -2491,8 +2612,11 @@ function cycleNav(delta) {
   goScreen(next);
 }
 
+window.addEventListener('focus', () => { state.windowFocused = true; });
+window.addEventListener('blur', () => { state.windowFocused = false; clearFocus(); });
 window.addEventListener('mousedown', () => clearFocus());
 window.addEventListener('keydown', (e) => {
+  if (!state.windowFocused || document.hidden) return;
   if (e.key === 'Escape') {
     if (state.tour.open) { closeTour(true); return; }
     if ($('helpAnchor')?.classList.contains('open')) { closeHelpMenu(); return; }
@@ -2532,11 +2656,24 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Gamepad polling loop (XInput / DualSense / Switch Pro)
+// Strictly paused whenever the launcher loses Win32/DOM focus, is hidden, or the game is running.
 (function initGamepadLoop() {
   const prev = {};
   let lastAxisTs = 0;
 
+  function resetPrev() {
+    for (const k of Object.keys(prev)) delete prev[k];
+  }
+
   function poll() {
+    const gameRunning = !!state.playing?.running;
+    const canReadGamepad = state.windowFocused && document.hasFocus() && !document.hidden && !gameRunning;
+    if (!canReadGamepad) {
+      resetPrev();
+      requestAnimationFrame(poll);
+      return;
+    }
+
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     const gp = pads && [...pads].find(p => p && p.connected);
 
@@ -2598,7 +2735,7 @@ if (window.chrome && window.chrome.webview) {
 
     if (m.t === 'state') {
       const prevRomfs = lastMediaRomfs;
-      for (const k of ['config', 'install', 'hardware', 'recommendation', 'presets', 'launchPlan', 'bgmTracks', 'saves', 'mods', 'ini', 'steam', 'setup', 'dlss', 'shaderBuild', 'playing', 'logs']) {
+      for (const k of ['config', 'install', 'hardware', 'recommendation', 'presets', 'launchPlan', 'bgmTracks', 'saves', 'mods', 'ini', 'steam', 'setup', 'dlss', 'shaderBuild', 'updater', 'playing', 'logs']) {
         if (m[k] !== undefined) state[k] = m[k];
       }
       if (m.playing?.running) {
@@ -2637,6 +2774,13 @@ if (window.chrome && window.chrome.webview) {
       if (m.isDone) state.shaderBuild = { running: false };
       renderDlssAndShaderControls(state.install, state.hardware);
       if (state.onboarding.open && state.onboarding.step === 1) renderOnboardingOptCards(state.hardware, state.install);
+    } else if (m.t === 'updateProgress') {
+      state.updateProgress = m;
+      if (m.isDone && state.updater) state.updater.applying = false;
+      renderUpdater();
+    } else if (m.t === 'focus') {
+      state.windowFocused = !!m.on;
+      if (!state.windowFocused) clearFocus();
     } else if (m.t === 'go' && m.s) {
       goScreen(m.s);
     } else if (m.t === 'toast') {

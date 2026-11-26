@@ -26,6 +26,11 @@ public sealed class Backend
     bool dlssRunning;
     CancellationTokenSource? shaderCts;
     bool shaderRunning;
+    CancellationTokenSource? updateCts;
+    bool updateChecking;
+    bool updateApplying;
+    UpdateCheckResult? lastUpdateCheck;
+    readonly string? justUpdatedVersion;
 
     InstallStatus install;
     HardwareInfo hardware;
@@ -35,12 +40,13 @@ public sealed class Backend
     string activeLaunchProfile = "";
     DateTime playingSince;
 
-    public Backend(WinHost host, Content content, string projectRoot, LauncherConfig config)
+    public Backend(WinHost host, Content content, string projectRoot, LauncherConfig config, string? justUpdatedVersion = null)
     {
         this.host = host;
         this.content = content;
         this.projectRoot = projectRoot;
         this.config = config;
+        this.justUpdatedVersion = justUpdatedVersion;
 
         var installDir = GameInstall.ResolveInstallDir(config, projectRoot);
         install = GameInstall.Inspect(installDir, projectRoot, computeHashes: false);
@@ -134,6 +140,25 @@ public sealed class Backend
             install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: true);
             PushState("install", install);
         });
+
+        if (!string.IsNullOrWhiteSpace(justUpdatedVersion))
+        {
+            string hintMsg = install.HintsNewerThanAot
+                ? $"Atualizado para {justUpdatedVersion}! Novos hints AOT disponíveis em Configurações › Sistema."
+                : $"Launcher e runtime atualizados para {justUpdatedVersion} com sucesso!";
+            Toast(hintMsg, "decide");
+        }
+
+        // Silent background update check on startup (skipped in automated visual QA screenshot mode)
+        bool shotMode = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("XC2_LAUNCHER_SHOT"));
+        if (config.AutoCheckUpdates && !shotMode)
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(1500);
+                await RunUpdateCheckAsync(manual: false);
+            });
+        }
     }
 
     void DispatchCommand(string cmd, JsonNode m)
@@ -417,6 +442,29 @@ public sealed class Backend
                 HandleSetupCancel();
                 break;
 
+            case "aot.recompile":
+                HandleAotRecompile();
+                break;
+
+            case "update.check":
+                _ = Task.Run(() => RunUpdateCheckAsync(manual: true));
+                break;
+
+            case "update.apply":
+                HandleUpdateApply();
+                break;
+
+            case "update.cancel":
+                HandleUpdateCancel();
+                break;
+
+            case "update.openReleases":
+                Process.Start(new ProcessStartInfo(lastUpdateCheck?.ReleaseUrl ?? LauncherUpdater.ReleasesPageUrl())
+                {
+                    UseShellExecute = true
+                });
+                break;
+
             case "onboarding.complete":
                 config.OnboardingCompleted = true;
                 config.OnboardingVersion = 1;
@@ -485,6 +533,8 @@ public sealed class Backend
                 config.MinimizeOnLaunch = (bool?)lObj["minimizeOnLaunch"] ?? false;
             if (lObj["closeAfterLaunch"] != null)
                 config.CloseAfterLaunch = (bool?)lObj["closeAfterLaunch"] ?? false;
+            if (lObj["autoCheckUpdates"] != null)
+                config.AutoCheckUpdates = (bool?)lObj["autoCheckUpdates"] ?? true;
             if (lObj["accentTheme"] != null)
                 config.AccentTheme = lObj["accentTheme"]!.ToString();
             if (lObj["soundLevel"] != null)
@@ -1002,6 +1052,247 @@ public sealed class Backend
         }
     }
 
+    void HandleAotRecompile()
+    {
+        if (setupRunning)
+            throw new InvalidOperationException("Uma operação de instalação ou recompilação já está em andamento.");
+        if (playing || GameRunner.IsGameRunning())
+            throw new InvalidOperationException("Feche o jogo antes de recompilar o código nativo (AOT).");
+        if (!install.HasExefsForAot)
+            throw new InvalidOperationException("Pasta exefs/main não encontrada nesta instalação.");
+
+        setupRunning = true;
+        setupCts?.Dispose();
+        setupCts = new CancellationTokenSource();
+        var ct = setupCts.Token;
+
+        PushState("setup", new
+        {
+            running = true,
+            preflight = lastSetupPreflight,
+            statusName = setupPipeline.StatusName,
+            isAvailable = setupPipeline.IsAvailable
+        });
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await setupPipeline.RecompileAotOnlyAsync(install.InstallDir, projectRoot, prog =>
+                {
+                    Send(new JsonObject
+                    {
+                        ["t"] = "setupProgress",
+                        ["stage"] = prog.Stage,
+                        ["stageIndex"] = prog.StageIndex,
+                        ["stageCount"] = prog.StageCount,
+                        ["percent"] = Math.Round(prog.Percent, 1),
+                        ["detail"] = prog.Detail,
+                        ["logLine"] = prog.LogLine,
+                        ["isDone"] = prog.IsDone,
+                        ["isError"] = prog.IsError
+                    });
+                }, ct);
+
+                setupRunning = false;
+                install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: true);
+                PushFullState(includeHashes: true);
+                Toast(result.Summary, "decide");
+            }
+            catch (OperationCanceledException)
+            {
+                setupRunning = false;
+                Send(new JsonObject
+                {
+                    ["t"] = "setupProgress",
+                    ["stage"] = "Cancelado",
+                    ["stageIndex"] = 0,
+                    ["stageCount"] = 1,
+                    ["percent"] = 0,
+                    ["detail"] = "Recompilação AOT cancelada.",
+                    ["isDone"] = true,
+                    ["isError"] = true
+                });
+                PushState("setup", new { running = false, preflight = lastSetupPreflight, statusName = setupPipeline.StatusName, isAvailable = setupPipeline.IsAvailable });
+                Toast("Recompilação AOT cancelada.", isError: true);
+            }
+            catch (Exception ex)
+            {
+                setupRunning = false;
+                LauncherLog.Write($"aot recompile failed: {ex.Message}");
+                Send(new JsonObject
+                {
+                    ["t"] = "setupProgress",
+                    ["stage"] = "Erro",
+                    ["stageIndex"] = 0,
+                    ["stageCount"] = 1,
+                    ["percent"] = 0,
+                    ["detail"] = ex.Message,
+                    ["isDone"] = true,
+                    ["isError"] = true
+                });
+                PushState("setup", new { running = false, preflight = lastSetupPreflight, statusName = setupPipeline.StatusName, isAvailable = setupPipeline.IsAvailable });
+                Toast($"Erro ao recompilar AOT: {ex.Message}", isError: true);
+            }
+        });
+    }
+
+    async Task RunUpdateCheckAsync(bool manual)
+    {
+        if (updateChecking || updateApplying) return;
+        updateChecking = true;
+        PushUpdaterState();
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            var res = await LauncherUpdater.CheckForUpdatesAsync(cts.Token);
+            lastUpdateCheck = res;
+            updateChecking = false;
+            PushUpdaterState();
+
+            if (res.HasUpdate)
+            {
+                LauncherLog.Write($"updater: new version available {res.LatestTag} (current v{res.CurrentVersion})");
+                if (manual)
+                    Toast($"Nova versão {res.LatestTag} disponível! Clique em Atualizar agora.", "decide");
+            }
+            else if (manual)
+            {
+                if (!string.IsNullOrWhiteSpace(res.Error))
+                    Toast(res.Error, "error", isError: true);
+                else
+                    Toast($"Você já está na versão mais recente (v{res.CurrentVersion}).", "cursor");
+            }
+        }
+        catch (Exception ex)
+        {
+            updateChecking = false;
+            LauncherLog.Write($"updater: check error: {ex.Message}");
+            PushUpdaterState();
+            if (manual)
+                Toast($"Falha ao verificar atualizações: {ex.Message}", "error", isError: true);
+        }
+    }
+
+    void HandleUpdateApply()
+    {
+        if (updateApplying)
+            throw new InvalidOperationException("Uma atualização já está em andamento.");
+        if (playing || GameRunner.IsGameRunning())
+            throw new InvalidOperationException("Feche o jogo antes de aplicar a atualização.");
+        if (setupRunning || dlssRunning || shaderRunning)
+            throw new InvalidOperationException("Aguarde a operação em andamento terminar antes de atualizar.");
+        if (lastUpdateCheck == null || !lastUpdateCheck.HasUpdate)
+            throw new InvalidOperationException("Nenhuma atualização pendente. Clique em Verificar atualizações primeiro.");
+
+        var release = lastUpdateCheck;
+        updateApplying = true;
+        updateCts?.Dispose();
+        updateCts = new CancellationTokenSource();
+        var ct = updateCts.Token;
+        PushUpdaterState();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var res = await LauncherUpdater.DownloadAndApplyAsync(
+                    release,
+                    projectRoot,
+                    install.InstallDir,
+                    Environment.ProcessPath,
+                    prog =>
+                    {
+                        Send(new JsonObject
+                        {
+                            ["t"] = "updateProgress",
+                            ["stage"] = prog.Stage,
+                            ["percent"] = Math.Round(prog.Percent, 1),
+                            ["detail"] = prog.Detail,
+                            ["isDone"] = prog.IsDone,
+                            ["isError"] = prog.IsError
+                        });
+                    },
+                    ct);
+
+                updateApplying = false;
+
+                if (res.LauncherReplaced && !string.IsNullOrEmpty(res.NewLauncherPath))
+                {
+                    Toast($"Atualização {res.TargetTag} aplicada! Reiniciando o launcher...", "decide");
+                    await Task.Delay(900);
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = res.NewLauncherPath,
+                        WorkingDirectory = Path.GetDirectoryName(res.NewLauncherPath) ?? projectRoot,
+                        Arguments = $"--updated-from {Environment.ProcessId} --updated-version \"{res.TargetTag}\"",
+                        UseShellExecute = false
+                    };
+                    Process.Start(psi);
+                    host.Close();
+                    return;
+                }
+
+                install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: true);
+                lastUpdateCheck = lastUpdateCheck with { HasUpdate = false, CurrentVersion = release.LatestVersion };
+                PushFullState(includeHashes: true);
+                Toast(res.Summary, "decide");
+            }
+            catch (OperationCanceledException)
+            {
+                updateApplying = false;
+                Send(new JsonObject
+                {
+                    ["t"] = "updateProgress",
+                    ["stage"] = "Cancelado",
+                    ["percent"] = 0,
+                    ["detail"] = "Download da atualização cancelado.",
+                    ["isDone"] = true,
+                    ["isError"] = true
+                });
+                PushUpdaterState();
+                Toast("Atualização cancelada.", isError: true);
+            }
+            catch (Exception ex)
+            {
+                updateApplying = false;
+                LauncherLog.Write($"updater: apply failed: {ex.Message}");
+                Send(new JsonObject
+                {
+                    ["t"] = "updateProgress",
+                    ["stage"] = "Erro",
+                    ["percent"] = 0,
+                    ["detail"] = ex.Message,
+                    ["isDone"] = true,
+                    ["isError"] = true
+                });
+                PushUpdaterState();
+                Toast($"Erro ao atualizar: {ex.Message}", "error", isError: true);
+            }
+        });
+    }
+
+    void HandleUpdateCancel()
+    {
+        if (updateApplying && updateCts != null && !updateCts.IsCancellationRequested)
+        {
+            updateCts.Cancel();
+            Toast("Cancelando atualização...");
+        }
+    }
+
+    object BuildUpdaterPayload() => new
+    {
+        currentVersion = LauncherUpdater.CurrentVersion,
+        checking = updateChecking,
+        applying = updateApplying,
+        repoUrl = LauncherUpdater.ReleasesPageUrl(),
+        result = lastUpdateCheck
+    };
+
+    void PushUpdaterState() => PushState("updater", BuildUpdaterPayload());
+
     void OpenFolder(string what)
     {
         string target = what switch
@@ -1065,6 +1356,7 @@ public sealed class Backend
             setup = new { running = setupRunning, preflight = lastSetupPreflight, statusName = setupPipeline.StatusName, isAvailable = setupPipeline.IsAvailable },
             dlss = new { running = dlssRunning },
             shaderBuild = new { running = shaderRunning },
+            updater = BuildUpdaterPayload(),
             playing = new { running = playing, profile = activeLaunchProfile, startedAt = playingSince.ToString("HH:mm:ss") },
             logs = new
             {

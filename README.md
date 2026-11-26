@@ -40,6 +40,7 @@ A versão pronta na aba **Releases** já acompanha a **tradução e localizaçã
   - Pure managed C# runtime media extractor reading artwork (`bf2.arh`/`bf2.ard`), BGM (`.nop`), and UI SFX (`system.pck`) directly from the player's own extracted `romfs` (zero copyrighted media embedded in the repository).
   - Optional 1-click **NVIDIA DLSS 4.5 / DLAA** installer (on-demand download directly from NVIDIA's official `NVIDIA/DLSS` repository with Windows Authenticode verification — never redistributed in this repo/zip).
   - Optional built-in pure C# **Shader Catalog Builder** (`xc2_shaders.snxs`) in Onboarding & Settings to pre-compile shaders once from the user's own `romfs` + expansions (no Python needed).
+  - Built-in **Auto-Updater** (GitHub Releases with `SHA256SUMS.txt` verification, Zip-Slip protection, atomic runtime/translation/hints updates, and 1-click AOT recompilation while strictly preserving user ROMs, saves, INI, DLSS, and custom mods).
 - **Native Runtime Extensions** (`extensions/`):
   - `native_ui.dll`: In-game PC Settings extension (`System → Options`), gracefully preserving original menus when custom layout assets are absent.
   - `presence.dll`: Discord Rich Presence showing live region, landmark, Driver, Blade, and session timer.

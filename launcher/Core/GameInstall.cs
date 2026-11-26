@@ -41,7 +41,10 @@ public sealed record InstallStatus(
     string? VisualKitDir,
     bool IsReadyToPlay,
     string[] AvailableInstallDirs,
-    string? DlssVersion = null
+    string? DlssVersion = null,
+    int HintsCount = 0,
+    bool HintsNewerThanAot = false,
+    bool HasExefsForAot = false
 );
 
 public static class GameInstall
@@ -137,6 +140,24 @@ public static class GameInstall
         string? dlssVersion = hasDlss ? DlssDownloader.GetInstalledVersion(installDir) : null;
         bool hasNacp = File.Exists(nacpPath) || File.Exists(Path.Combine(dataDir, "control.nacp"));
         bool hasIni = File.Exists(iniPath);
+        bool hasExefs = File.Exists(Path.Combine(dataDir, "exefs", "main"));
+        string hintsPath = Path.Combine(installDir, "xenoblade2.hints");
+        int hintsCount = 0;
+        bool hintsNewerThanAot = false;
+        if (File.Exists(hintsPath))
+        {
+            try
+            {
+                hintsCount = File.ReadLines(hintsPath).Count(l => !string.IsNullOrWhiteSpace(l));
+                if (hasAot)
+                {
+                    var hintsTime = File.GetLastWriteTimeUtc(hintsPath);
+                    var aotTime = File.GetLastWriteTimeUtc(aotPath);
+                    hintsNewerThanAot = hintsTime > aotTime.AddSeconds(15);
+                }
+            }
+            catch { }
+        }
 
         string exeHash = "", aotHash = "";
         DateTime exeTime = hasExe ? File.GetLastWriteTime(exePath) : DateTime.MinValue;
@@ -239,7 +260,10 @@ public static class GameInstall
             VisualKitDir: visualKit,
             IsReadyToPlay: hasExe && hasAot && hasRomfs,
             AvailableInstallDirs: DiscoverInstallDirs(projectRoot),
-            DlssVersion: dlssVersion
+            DlssVersion: dlssVersion,
+            HintsCount: hintsCount,
+            HintsNewerThanAot: hintsNewerThanAot,
+            HasExefsForAot: hasExefs
         );
     }
 

@@ -15,6 +15,7 @@ public sealed class LauncherConfig
     public bool Custom4kSelectiveScale { get; set; } = false;
     public bool MinimizeOnLaunch { get; set; } = false;
     public bool CloseAfterLaunch { get; set; } = false;
+    public bool AutoCheckUpdates { get; set; } = true;
     public bool OnboardingCompleted { get; set; } = false;
     public int OnboardingVersion { get; set; } = 0;
 

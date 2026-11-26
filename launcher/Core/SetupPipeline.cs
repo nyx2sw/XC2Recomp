@@ -55,6 +55,7 @@ public interface ISetupPipeline
     bool IsAvailable { get; }
     SetupPreflightResult Inspect(string nupPath, string targetInstallDir, string projectRoot);
     Task<SetupResult> RunAsync(SetupRequest request, Action<SetupProgress>? onProgress, CancellationToken ct);
+    Task<SetupResult> RecompileAotOnlyAsync(string targetInstallDir, string projectRoot, Action<SetupProgress>? onProgress, CancellationToken ct);
 }
 
 public sealed class NativeSetupPipeline : ISetupPipeline
@@ -301,6 +302,49 @@ public sealed class NativeSetupPipeline : ISetupPipeline
 
         onProgress?.Invoke(new SetupProgress("Concluído", totalStages, totalStages, 100, summary, summary, IsDone: true));
         return new SetupResult(status.IsReadyToPlay, targetDir, baseFiles, addonsBuilt, aotCompiled, displayVersion, sw.Elapsed.TotalSeconds, summary);
+    }
+
+    public async Task<SetupResult> RecompileAotOnlyAsync(
+        string targetInstallDir,
+        string projectRoot,
+        Action<SetupProgress>? onProgress,
+        CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        if (GameRunner.IsGameRunning())
+            throw new InvalidOperationException("Feche o jogo antes de recompilar o código nativo (AOT).");
+
+        string targetDir = Path.GetFullPath(targetInstallDir);
+        string dataDir = Path.Combine(targetDir, "xenoblade2_data");
+        string exefsDir = Path.Combine(dataDir, "exefs");
+        if (!Directory.Exists(exefsDir) || !File.Exists(Path.Combine(exefsDir, "main")))
+            throw new FileNotFoundException("Pasta xenoblade2_data/exefs/main não encontrada. Execute a instalação inicial (.nup) primeiro.", exefsDir);
+
+        string compilerExe = FindCompilerExe(targetDir, projectRoot)
+            ?? throw new FileNotFoundException("Executável do recompilador (xenoblade2.exe) não encontrado.");
+
+        onProgress?.Invoke(new SetupProgress("Recompilando código nativo (AOT)", 1, 1, 8,
+            "Compilando binário Ounce64 → x86-64 com os hints mais recentes...",
+            $"AOT-only: \"{compilerExe}\" -r \"{exefsDir}\" xenoblade2 --outdir \"{targetDir}\" --fp-fast --relax-stack-volatile"));
+
+        int lines = 0;
+        await RunAotCompilerAsync(compilerExe, exefsDir, targetDir, line =>
+        {
+            lines++;
+            double pct = Math.Min(98, 10 + lines * 0.9);
+            onProgress?.Invoke(new SetupProgress("Recompilando código nativo (AOT)", 1, 1, pct, line, line));
+        }, ct);
+
+        string aotPath = Path.Combine(targetDir, "xenoblade2_code.dll");
+        if (!File.Exists(aotPath))
+            throw new InvalidOperationException("O recompilador terminou mas xenoblade2_code.dll não foi encontrado.");
+
+        sw.Stop();
+        var status = GameInstall.Inspect(targetDir, projectRoot, computeHashes: false);
+        string summary = $"Código nativo (AOT) recompilado com {status.HintsCount:N0} hints em {sw.Elapsed.TotalSeconds:F1}s.";
+        LauncherLog.Write($"setup[aot-only]: {summary}");
+        onProgress?.Invoke(new SetupProgress("Concluído", 1, 1, 100, summary, summary, IsDone: true));
+        return new SetupResult(status.IsReadyToPlay, targetDir, 0, 0, true, "3.0.1", sw.Elapsed.TotalSeconds, summary);
     }
 
     static async Task RunAotCompilerAsync(

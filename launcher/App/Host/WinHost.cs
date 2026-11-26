@@ -299,7 +299,9 @@ public sealed class WinHost
                 ctl?.NotifyParentWindowPositionChanged();
                 break;
             case 0x0006: // WM_ACTIVATE
-                if ((wp.ToInt64() & 0xFFFF) != 0) ctl?.MoveFocus(CoreWebView2MoveFocusReason.Programmatic);
+                bool active = (wp.ToInt64() & 0xFFFF) != 0;
+                if (active) ctl?.MoveFocus(CoreWebView2MoveFocusReason.Programmatic);
+                Post("{\"t\":\"focus\",\"on\":" + (active ? "true" : "false") + "}");
                 break;
             case 0x02E0: // WM_DPICHANGED
                 var rc = Marshal.PtrToStructure<RECT>(lp);

@@ -34,6 +34,11 @@
         </div>
 
         <div class="top-right">
+          <button class="update-pill hidden" id="topbarUpdateBtn" type="button" data-f title="Nova atualização disponível">
+            <span class="update-pill-dot"></span>
+            <span id="topbarUpdateLabel">Atualização</span>
+          </button>
+
           <div class="help-anchor" id="helpAnchor">
             <button class="audio-btn help-btn" id="helpBtn" data-f title="Ajuda, Guia Inicial e Tour" aria-label="Ajuda e Guia Inicial">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -806,6 +811,16 @@
                       <label class="switch"><input type="checkbox" id="cfgCloseLaunch"><span class="slider"></span></label>
                     </div>
                   </div>
+
+                  <div class="opt-row">
+                    <div class="opt-label">
+                      <strong>Verificar atualizações ao abrir</strong>
+                      <span>Busca novas versões do launcher, runtime e traduções no GitHub automaticamente.</span>
+                    </div>
+                    <div class="opt-ctrl right">
+                      <label class="switch"><input type="checkbox" id="cfgAutoCheckUpdates" checked><span class="slider"></span></label>
+                    </div>
+                  </div>
                 </div>
               </details>
             </div>
@@ -883,15 +898,39 @@
                     </div>
                   </div>
 
+                  <div class="xc-sys-win update-panel" id="updatePanel">
+                    <div class="panel-inline-head">
+                      <h3>Atualizações do Launcher &amp; Runtime</h3>
+                      <span class="xc-status good" id="updateVersionBadge">v0.2.0</span>
+                    </div>
+                    <p class="panel-desc" id="updateStatusDesc">Verifique novas versões para receber correções de GPU, desempenho, traduções e melhorias automaticamente sem baixar tudo de novo.</p>
+                    <div class="update-notes hidden" id="updateNotesBox"></div>
+                    <div class="setup-actions">
+                      <button class="xc-btn primary sm hidden" id="updateApplyBtn" type="button" data-f>Atualizar agora</button>
+                      <button class="xc-btn sm" id="updateCheckBtn" type="button" data-f>Verificar atualizações</button>
+                      <button class="xc-btn danger sm hidden" id="updateCancelBtn" type="button" data-f>Cancelar</button>
+                      <button class="xc-btn sm ghost" id="updateReleasesBtn" type="button" data-f>Ver releases</button>
+                    </div>
+                    <div class="setup-progress hidden" id="updateProgressWrap">
+                      <div class="setup-prog-head">
+                        <strong id="updateProgStage">Preparando…</strong>
+                        <span id="updateProgPct">0%</span>
+                      </div>
+                      <div class="setup-bar"><div class="setup-bar-fill" id="updateProgFill" style="width:0%"></div></div>
+                      <div class="setup-prog-detail" id="updateProgDetail">—</div>
+                    </div>
+                  </div>
+
                   <div class="xc-sys-win setup-panel" id="setupPanel">
                     <div class="panel-inline-head">
-                      <h3>Instalação Inicial (.nup)</h3>
+                      <h3>Instalação Inicial (.nup) &amp; Código AOT</h3>
                       <span class="xc-status good" id="setupBadge">Pipeline Nativo</span>
                     </div>
-                    <p class="panel-desc">Extrai o pacote Switch 2 Edition 3.0.1 (.nup), expansões e compila o código nativo (AOT).</p>
+                    <p class="panel-desc" id="setupPanelDesc">Extrai o pacote Switch 2 Edition 3.0.1 (.nup), expansões e compila o código nativo (AOT).</p>
                     <div class="setup-actions">
                       <button class="xc-btn sm" id="setupPickNupBtn" data-f>Selecionar arquivo .nup…</button>
                       <button class="xc-btn primary sm hidden" id="setupStartBtn" data-f>Instalar agora</button>
+                      <button class="xc-btn sm ghost hidden" id="aotRecompileBtn" type="button" data-f>Recompilar código AOT</button>
                       <button class="xc-btn danger sm hidden" id="setupCancelBtn" data-f>Cancelar</button>
                     </div>
                     <div class="setup-preflight hidden" id="setupPreflightBox"></div>

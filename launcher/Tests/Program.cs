@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using XC2.Core;
@@ -675,6 +676,110 @@ try
                 $"Shader count parity mismatch: C# built {res.UniqueShaders}, reference has {expectedCount}");
         }
         Console.WriteLine($"       ShaderCatalogBuilder C# parity OK: {res.UniqueShaders:N0} shaders ({res.SizeBytes / 1048576.0:F1} MiB) in {res.ElapsedSeconds:F1}s");
+    });
+
+    Check("LauncherUpdater compares SemVer, parses GitHub release JSON/SHA256SUMS, blocks Zip-Slip, merges hints, and preserves user data", () =>
+    {
+        Assert(LauncherUpdater.CompareVersions("v0.2.0", "0.1.0") > 0, "0.2.0 > 0.1.0");
+        Assert(LauncherUpdater.CompareVersions("v0.10.0", "0.2.0") > 0, "0.10.0 > 0.2.0");
+        Assert(LauncherUpdater.CompareVersions("v0.2.0", "0.2.0") == 0, "v0.2.0 == 0.2.0");
+        Assert(LauncherUpdater.CompareVersions("0.2.0-beta.1", "0.2.0") < 0, "prerelease < release");
+
+        const string sampleRelease = """
+        {
+          "tag_name": "v0.2.0",
+          "name": "XC2Recomp v0.2.0",
+          "body": "- Fix AMD black screen\n- Fix Tiger Tiger 24 FPS\n- Fix background gamepad",
+          "html_url": "https://github.com/nyx2sw/XC2Recomp/releases/tag/v0.2.0",
+          "published_at": "2026-11-25T23:55:00Z",
+          "assets": [
+            { "name": "SHA256SUMS.txt", "size": 96, "browser_download_url": "https://example.invalid/SHA256SUMS.txt" },
+            { "name": "XC2Recomp-v0.2.0-win-x64.zip", "size": 124000000, "browser_download_url": "https://example.invalid/XC2Recomp-v0.2.0-win-x64.zip" }
+          ]
+        }
+        """;
+        var chk = LauncherUpdater.ParseReleaseJson(sampleRelease, "0.1.0");
+        Assert(chk.HasUpdate && chk.LatestTag == "v0.2.0", "ParseReleaseJson detects newer version");
+        Assert(chk.AssetName == "XC2Recomp-v0.2.0-win-x64.zip", "Selects win-x64 zip asset");
+        Assert(chk.ChecksumsUrl == "https://example.invalid/SHA256SUMS.txt", "Selects SHA256SUMS.txt");
+        var chkSame = LauncherUpdater.ParseReleaseJson(sampleRelease, "0.2.0");
+        Assert(!chkSame.HasUpdate, "Same version reports no update");
+
+        string fakeHash = new string('a', 64);
+        Assert(LauncherUpdater.ParseExpectedSha256($"{fakeHash}  XC2Recomp-v0.2.0-win-x64.zip\n", "XC2Recomp-v0.2.0-win-x64.zip") == fakeHash,
+            "SHA256SUMS parser extracts matching hash");
+
+        // Zip-Slip guard test
+        var badZip = Path.Combine(tempRoot, "zipslip.zip");
+        using (var za = ZipFile.Open(badZip, ZipArchiveMode.Create))
+        {
+            var e = za.CreateEntry("../escape.txt");
+            using var sw = new StreamWriter(e.Open());
+            sw.Write("pwn");
+        }
+        bool zipSlipBlocked = false;
+        try { LauncherUpdater.ExtractZipSafe(badZip, Path.Combine(tempRoot, "zipslip_out")); }
+        catch (InvalidDataException) { zipSlipBlocked = true; }
+        Assert(zipSlipBlocked, "Zip-Slip traversal entry must be rejected");
+
+        // End-to-end staged update apply preserving user ROM/save/INI/DLSS/custom mods & merging hints
+        var fakeRoot = Path.Combine(tempRoot, "upd_user");
+        var fakeGames = Path.Combine(fakeRoot, "games");
+        var fakeRuntime = Path.Combine(fakeRoot, "runtime");
+        var fakeData = Path.Combine(fakeGames, "xenoblade2_data");
+        Directory.CreateDirectory(Path.Combine(fakeData, "romfs"));
+        Directory.CreateDirectory(Path.Combine(fakeData, "save", "user"));
+        Directory.CreateDirectory(Path.Combine(fakeData, "pc_ui"));
+        Directory.CreateDirectory(Path.Combine(fakeData, "localization", "pt-br", "romfs"));
+        Directory.CreateDirectory(Path.Combine(fakeData, "localization", "custom_mod"));
+        Directory.CreateDirectory(fakeRuntime);
+
+        File.WriteAllText(Path.Combine(fakeRoot, "Xenoblade2Launcher.exe"), "OLD_LAUNCHER");
+        File.WriteAllText(Path.Combine(fakeRuntime, "xenoblade2.exe"), "OLD_RT_EXE");
+        File.WriteAllText(Path.Combine(fakeGames, "xenoblade2.exe"), "OLD_GAME_EXE");
+        File.WriteAllText(Path.Combine(fakeGames, "nvngx_dlss.dll"), "USER_NVIDIA_DLSS");
+        File.WriteAllText(Path.Combine(fakeGames, "xenoblade2.ini"), "fps_limit=120\n");
+        File.WriteAllText(Path.Combine(fakeGames, "xenoblade2.hints"), "8000af4\n8750000\n");
+        File.WriteAllText(Path.Combine(fakeData, "romfs", "bf2.ard"), "USER_ROM_15GB");
+        File.WriteAllText(Path.Combine(fakeData, "save", "user", "bf2savefile.sav"), "USER_SAVE_DATA");
+        File.WriteAllText(Path.Combine(fakeData, "pc_ui", "theme.bin"), "USER_THEME");
+        File.WriteAllText(Path.Combine(fakeData, "pc_ui", "native_ui.dll"), "OLD_UI_DLL");
+        File.WriteAllText(Path.Combine(fakeData, "localization", "pt-br", "romfs", "bf2.arh"), "OLD_PTBR");
+        File.WriteAllText(Path.Combine(fakeData, "localization", "custom_mod", "keep.txt"), "CUSTOM_MOD");
+
+        // Build staged update package
+        var staged = Path.Combine(tempRoot, "upd_pkg");
+        Directory.CreateDirectory(Path.Combine(staged, "runtime", "pc_ui"));
+        Directory.CreateDirectory(Path.Combine(staged, "runtime", "localization", "pt-br", "romfs"));
+        File.WriteAllText(Path.Combine(staged, "Xenoblade2Launcher.exe"), "NEW_LAUNCHER_V020");
+        File.WriteAllText(Path.Combine(staged, "runtime", "xenoblade2.exe"), "NEW_SNX_EXE_V020");
+        File.WriteAllText(Path.Combine(staged, "runtime", "snx_dlss.dll"), "NEW_SNX_DLSS");
+        File.WriteAllText(Path.Combine(staged, "runtime", "xenoblade2.hints"), "8000af4\n8756b00\n8758a00\n");
+        File.WriteAllText(Path.Combine(staged, "runtime", "pc_ui", "native_ui.dll"), "NEW_UI_DLL");
+        File.WriteAllText(Path.Combine(staged, "runtime", "localization", "pt-br", "romfs", "bf2.arh"), "NEW_PTBR");
+
+        var applyRes = LauncherUpdater.ApplyStagedDirectory(
+            staged, fakeRoot, fakeGames, Path.Combine(fakeRoot, "Xenoblade2Launcher.exe"), "v0.2.0", allowSelfReplace: true);
+
+        Assert(applyRes.Success && applyRes.LauncherReplaced, "Update succeeded and replaced launcher");
+        Assert(applyRes.AddedHintsCount == 2 && applyRes.TotalHintsCount == 4, $"Hints union merged: +{applyRes.AddedHintsCount}, total={applyRes.TotalHintsCount}");
+        Assert(File.ReadAllText(Path.Combine(fakeRoot, "Xenoblade2Launcher.exe")) == "NEW_LAUNCHER_V020", "Launcher exe swapped");
+        Assert(File.ReadAllText(Path.Combine(fakeRoot, "Xenoblade2Launcher.exe.old")) == "OLD_LAUNCHER", "Old launcher moved to .old");
+        Assert(File.ReadAllText(Path.Combine(fakeGames, "xenoblade2.exe")) == "NEW_SNX_EXE_V020", "Game runtime exe updated");
+        Assert(File.ReadAllText(Path.Combine(fakeRuntime, "xenoblade2.exe")) == "NEW_SNX_EXE_V020", "Portable runtime exe updated");
+        Assert(File.ReadAllText(Path.Combine(fakeData, "pc_ui", "native_ui.dll")) == "NEW_UI_DLL", "native_ui.dll updated");
+        Assert(File.ReadAllText(Path.Combine(fakeData, "localization", "pt-br", "romfs", "bf2.arh")) == "NEW_PTBR", "PT-BR pack updated");
+
+        // Strictly preserved user data assertions
+        Assert(File.ReadAllText(Path.Combine(fakeGames, "nvngx_dlss.dll")) == "USER_NVIDIA_DLSS", "nvngx_dlss.dll preserved");
+        Assert(File.ReadAllText(Path.Combine(fakeGames, "xenoblade2.ini")) == "fps_limit=120\n", "xenoblade2.ini preserved");
+        Assert(File.ReadAllText(Path.Combine(fakeData, "romfs", "bf2.ard")) == "USER_ROM_15GB", "bf2.ard preserved");
+        Assert(File.ReadAllText(Path.Combine(fakeData, "save", "user", "bf2savefile.sav")) == "USER_SAVE_DATA", "save preserved");
+        Assert(File.ReadAllText(Path.Combine(fakeData, "pc_ui", "theme.bin")) == "USER_THEME", "theme.bin preserved");
+        Assert(File.ReadAllText(Path.Combine(fakeData, "localization", "custom_mod", "keep.txt")) == "CUSTOM_MOD", "custom mod preserved");
+
+        LauncherUpdater.CleanupPreviousBinary(Path.Combine(fakeRoot, "Xenoblade2Launcher.exe"));
+        Assert(!File.Exists(Path.Combine(fakeRoot, "Xenoblade2Launcher.exe.old")), ".old cleaned up on startup");
     });
 }
 finally
