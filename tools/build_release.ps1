@@ -7,6 +7,11 @@ param(
     [string]$DllSourceDir = "",
     [string]$IconPath = "",
     [string]$LocalizationSourceDir = "",
+    [string]$GameRomfsDir = "",
+    [string]$PcUiAssetsDir = "",
+    [string]$RuntimeTestLog = "",
+    [string]$ThirdPartyLicenseDir = "",
+    [string[]]$PrivateRoot = @(),
     [string]$Strip = "llvm-strip",
     [switch]$Zip
 )
@@ -14,6 +19,30 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 if (-not $OutDir) { $OutDir = Join-Path $repoRoot 'release\XC2-PC-Edition' }
+$OutDir = [IO.Path]::GetFullPath($OutDir)
+if (Test-Path -LiteralPath $OutDir) { throw "Use uma pasta de saída nova: $OutDir" }
+if ([bool]$GameRomfsDir -ne [bool]$PcUiAssetsDir) { throw 'Use -GameRomfsDir e -PcUiAssetsDir juntos.' }
+
+function Get-SourceState([string]$Root) {
+    $resolved = (Resolve-Path -LiteralPath $Root).Path
+    $revision = & git -C $resolved rev-parse HEAD
+    if ($LASTEXITCODE -ne 0) { throw "Falha ao identificar o commit em $resolved" }
+    $tracked = & git -C $resolved diff --name-only HEAD
+    if ($LASTEXITCODE -ne 0) { throw "Falha ao listar as alterações em $resolved" }
+    $untracked = & git -C $resolved ls-files --others --exclude-standard
+    if ($LASTEXITCODE -ne 0) { throw "Falha ao listar arquivos novos em $resolved" }
+    $changed = @($tracked; $untracked) | Where-Object { $_ } | Sort-Object -Unique
+    [ordered]@{
+        commit = $revision
+        dirty = [bool]$changed
+        changes = @(foreach ($name in $changed) {
+            $file = Join-Path $resolved $name
+            [ordered]@{ path = $name; sha256 = if (Test-Path -LiteralPath $file -PathType Leaf) { (Get-FileHash -LiteralPath $file).Hash.ToLowerInvariant() } }
+        })
+    }
+}
+
+$sources = [ordered]@{ launcher = (Get-SourceState $repoRoot); runtime = (Get-SourceState $SnxRoot) }
 
 $snxExe = Join-Path $SnxBuildDir 'scarletnx.exe'
 if (-not (Test-Path $snxExe)) { throw "Built scarletnx.exe not found at $snxExe" }
@@ -32,12 +61,16 @@ if (-not (Test-Path $launcherExe)) { throw "Published launcher not found at $lau
 $extOut = Join-Path $OutDir 'runtime\pc_ui'
 New-Item -ItemType Directory -Path $extOut, (Join-Path $OutDir 'runtime\licenses') -Force | Out-Null
 
-& (Join-Path $repoRoot 'extensions\native_ui\build.ps1') -SnxRoot $SnxRoot -OutDir $extOut
+& (Join-Path $repoRoot 'extensions\native_ui\build.ps1') -SnxRoot $SnxRoot -OutDir $extOut -Strip $Strip
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& (Join-Path $repoRoot 'extensions\presence\build.ps1') -SnxRoot $SnxRoot -OutDir $extOut
+& (Join-Path $repoRoot 'extensions\presence\build.ps1') -SnxRoot $SnxRoot -OutDir $extOut -Strip $Strip
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Remove-Item (Join-Path $extOut 'test_model.exe'), (Join-Path $extOut 'model_test.exe') -Force -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $repoRoot 'extensions\presence\presence_names.tsv') (Join-Path $extOut 'presence_names.tsv') -Force
+if ($GameRomfsDir) {
+    & python -B (Join-Path $repoRoot 'tools/build_pc_ui_overlay.py') $GameRomfsDir $PcUiAssetsDir (Join-Path $extOut 'original_menu')
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar o overlay do menu de PC.' }
+}
 
 # 3. Stage Launcher + Stripped Runtime + Open-source Runtime DLLs
 $rtDir = Join-Path $OutDir 'runtime'
@@ -86,12 +119,45 @@ foreach ($lic in @('LICENSE', 'LICENSE.apache', 'NOTICE')) {
     Copy-Item (Join-Path $repoRoot $lic) (Join-Path $rtDir "licenses\$lic") -Force
     Copy-Item (Join-Path $repoRoot $lic) (Join-Path $OutDir $lic) -Force
 }
+if ($ThirdPartyLicenseDir) {
+    $licenses = Resolve-Path -LiteralPath $ThirdPartyLicenseDir
+    Copy-Item -LiteralPath $licenses.Path -Destination (Join-Path $rtDir 'licenses/third-party') -Recurse
+}
 Copy-Item (Join-Path $repoRoot 'README.md') (Join-Path $OutDir 'README.md') -Force
+
+$version = ((Get-Item -LiteralPath $launcherExe).VersionInfo.ProductVersion -split '\+', 2)[0]
+if (!$version) { throw 'Versão do launcher ausente.' }
+$verification = @(
+    [ordered]@{ name = 'launcher and JavaScript'; result = 'passed' }
+    [ordered]@{ name = 'native_ui model'; result = 'passed' }
+    [ordered]@{ name = 'presence model'; result = 'passed' }
+)
+if ($RuntimeTestLog) {
+    $log = Get-Item -LiteralPath $RuntimeTestLog
+    $summary = @(Get-Content -LiteralPath $log.FullName | Where-Object { $_ -match '^\s*\d+% tests passed(?:, \d+ tests failed)? out of \d+\s*$' })
+    if (!$summary -or $summary[-1] -notmatch '^\s*100% tests passed(?:, 0 tests failed)? out of \d+\s*$') { throw 'O log do CTest não registra uma suíte aprovada.' }
+    $verification += [ordered]@{ name = 'runtime CTest'; result = 'passed'; summary = $summary[-1].Trim(); logSha256 = (Get-FileHash -LiteralPath $log.FullName).Hash.ToLowerInvariant() }
+}
+$artifacts = @(Get-ChildItem -LiteralPath $OutDir -Recurse -File | Sort-Object FullName | ForEach-Object {
+    [ordered]@{
+        path = ($_.FullName.Substring($OutDir.TrimEnd('\', '/').Length + 1) -replace '\\', '/')
+        bytes = $_.Length
+        sha256 = (Get-FileHash -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+    }
+})
+$manifest = [ordered]@{ schema = 1; version = $version; sources = $sources; verification = $verification; files = $artifacts }
+$manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutDir 'release-manifest.json') -Encoding UTF8
 
 Write-Host "==> Portable release staged at $OutDir" -ForegroundColor Green
 if ($Zip) {
     $zipPath = "$OutDir.zip"
-    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+    if (Test-Path -LiteralPath $zipPath) { throw "O ZIP já existe: $zipPath" }
     Compress-Archive -Path "$OutDir\*" -DestinationPath $zipPath -CompressionLevel Optimal
+    $line = '{0}  {1}' -f (Get-FileHash -LiteralPath $zipPath).Hash.ToLowerInvariant(), (Split-Path -Leaf $zipPath)
+    Set-Content -LiteralPath "$zipPath.sha256" -Value $line -Encoding ASCII
+    $verifyArgs = @($zipPath)
+    foreach ($root in $PrivateRoot) { $verifyArgs += @('--private-root', $root) }
+    & python -B (Join-Path $repoRoot 'tools/verify_portable_release.py') @verifyArgs
+    if ($LASTEXITCODE -ne 0) { throw "Portable archive failed verification: $zipPath" }
     Write-Host "==> Created $zipPath" -ForegroundColor Green
 }

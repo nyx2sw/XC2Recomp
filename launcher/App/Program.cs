@@ -18,7 +18,6 @@ internal static class Program
         string? updatedVersion = ParseStringArg(args, "--updated-version");
         if (prevPid > 0)
             LauncherUpdater.WaitForPreviousProcess(prevPid);
-        LauncherUpdater.CleanupPreviousBinary(Environment.ProcessPath);
 
         // Single-instance guard (bypassed only during automated screenshot QA if needed)
         using var mutex = new Mutex(true, @"Local\XC2PCEditionLauncherSingleInstance", out bool isFirst);
@@ -28,6 +27,18 @@ internal static class Program
             return 0;
         }
 
+        var projectRoot = GameInstall.FindProjectRoot();
+        try
+        {
+            LauncherUpdater.RecoverInterruptedUpdate(projectRoot);
+            LauncherUpdater.CleanupPreviousBinary(Environment.ProcessPath);
+        }
+        catch (Exception ex)
+        {
+            LauncherLog.Write($"update recovery: {ex.Message}");
+            MessageBoxW(IntPtr.Zero, ex.Message, "Recuperação da atualização", 0x10);
+            return 4;
+        }
         if (WinHost.RuntimeVersion() == null)
         {
             MessageBoxW(IntPtr.Zero,
@@ -36,7 +47,6 @@ internal static class Program
             return 3;
         }
 
-        var projectRoot = GameInstall.FindProjectRoot();
         var config = LauncherConfig.Load();
         var content = new Content();
         var host = new WinHost(content, LauncherPaths.WebViewDataDir, devTools);

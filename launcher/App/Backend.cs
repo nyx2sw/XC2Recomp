@@ -28,7 +28,7 @@ public sealed class Backend
     bool shaderRunning;
     CancellationTokenSource? updateCts;
     bool updateChecking;
-    bool updateApplying;
+    volatile bool updateApplying;
     UpdateCheckResult? lastUpdateCheck;
     readonly string? justUpdatedVersion;
 
@@ -185,6 +185,9 @@ public sealed class Backend
 
     void DispatchCommand(string cmd, JsonNode m)
     {
+        if (updateApplying && cmd is "mods.activate" or "mods.install.pickZip" or "mods.install.pickFolder" or "setup.start" or "aot.recompile")
+            throw new InvalidOperationException("Aguarde a atualização terminar antes de alterar a instalação.");
+
         switch (cmd)
         {
             case "refresh":
@@ -498,6 +501,8 @@ public sealed class Backend
 
     void LaunchGame()
     {
+        if (updateApplying)
+            throw new InvalidOperationException("Aguarde a atualização terminar antes de abrir o jogo.");
         if (!install.IsReadyToPlay)
             throw new InvalidOperationException("Instalação incompleta: verifique xenoblade2.exe, xenoblade2_code.dll e romfs.");
 
@@ -890,6 +895,8 @@ public sealed class Backend
 
     void SwitchInstallDir(string dir)
     {
+        if (updateApplying)
+            throw new InvalidOperationException("Aguarde a atualização terminar antes de trocar a instalação.");
         if (playing || GameRunner.IsGameRunning())
             throw new InvalidOperationException("Feche o jogo antes de trocar a pasta de instalação.");
         if (!File.Exists(Path.Combine(dir, "xenoblade2.exe")))
@@ -913,6 +920,8 @@ public sealed class Backend
 
     void HandleDrop(string filePath, string context)
     {
+        if (updateApplying)
+            throw new InvalidOperationException("Aguarde a atualização terminar antes de alterar a instalação.");
         if (filePath.EndsWith(".nup", StringComparison.OrdinalIgnoreCase))
         {
             HandleSetupInspect(filePath, null);
@@ -1248,8 +1257,6 @@ public sealed class Backend
                     },
                     ct);
 
-                updateApplying = false;
-
                 if (res.LauncherReplaced && !string.IsNullOrEmpty(res.NewLauncherPath))
                 {
                     Toast($"Atualização {res.TargetTag} aplicada! Reiniciando o launcher...", "decide");
@@ -1266,6 +1273,7 @@ public sealed class Backend
                     return;
                 }
 
+                updateApplying = false;
                 install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: true);
                 lastUpdateCheck = lastUpdateCheck with { HasUpdate = false, CurrentVersion = release.LatestVersion };
                 PushFullState(includeHashes: true);

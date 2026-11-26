@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -22,7 +21,8 @@ public sealed record UpdateCheckResult(
     long AssetSizeBytes,
     string? ChecksumsUrl,
     DateTime CheckedAt,
-    string? Error = null
+    string? Error = null,
+    string? ChecksumAssetName = null
 );
 
 public sealed record UpdateProgress(
@@ -46,15 +46,15 @@ public sealed record UpdateApplyResult(
 
 /// <summary>
 /// Self-updater for XC2Recomp Launcher + ScarletNX runtime, extensions, localization packs, and AOT hints.
-/// Queries GitHub Releases (nyx2sw/XC2Recomp), verifies SHA-256 checksums when published,
-/// updates runtime binaries atomically, merges xenoblade2.hints without losing locally discovered hints,
+/// Queries GitHub Releases (nyx2sw/XC2Recomp), requires SHA-256 checksums,
+/// updates runtime files in a recoverable transaction, merges xenoblade2.hints without losing locally discovered hints,
 /// and never touches user ROMs, DLCs, saves, xenoblade2.ini, nvngx_dlss.dll, or shader_cache.
 /// </summary>
 public static class LauncherUpdater
 {
     public const string DefaultOwner = "nyx2sw";
     public const string DefaultRepo = "XC2Recomp";
-    public const string FallbackVersion = "0.2.2";
+    public const string FallbackVersion = "0.2.3";
 
     static readonly string[] UpdatableRuntimeDlls =
     [
@@ -65,12 +65,13 @@ public static class LauncherUpdater
 
     static readonly string[] UpdatablePcUiFiles =
     [
-        "native_ui.dll", "presence.dll", "presence_names.tsv"
+        "native_ui.dll", "presence.dll", "presence_names.tsv",
+        "original_menu/base_archive.txt", "original_menu/romfs/bf2.arh", "original_menu/romfs/bf2.ard.append"
     ];
 
     static readonly string[] UpdatableBundledPacks = ["pt-br", "pt-br-jp"];
 
-    static readonly string[] UpdatableRootDocs = ["README.md", "LICENSE", "LICENSE.apache", "NOTICE"];
+    static readonly string[] UpdatableRootDocs = ["README.md", "LICENSE", "LICENSE.apache", "NOTICE", "release-manifest.json"];
 
     static readonly HttpClient Http = CreateHttpClient();
 
@@ -206,7 +207,7 @@ public static class LauncherUpdater
 
         string assetName = "", assetUrl = "";
         long assetSize = 0;
-        string? checksumsUrl = null;
+        var checksumAssets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
         {
@@ -222,7 +223,7 @@ public static class LauncherUpdater
                 if (an.Equals("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase) ||
                     an.EndsWith(".sha256", StringComparison.OrdinalIgnoreCase))
                 {
-                    checksumsUrl ??= au;
+                    if (!string.IsNullOrWhiteSpace(au)) checksumAssets.TryAdd(an, au);
                 }
                 else if (an.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
@@ -253,6 +254,10 @@ public static class LauncherUpdater
             }
         }
 
+        string? checksumAssetName = checksumAssets.ContainsKey("SHA256SUMS.txt") ? "SHA256SUMS.txt"
+            : checksumAssets.ContainsKey(assetName + ".sha256") ? assetName + ".sha256" : null;
+        string? checksumsUrl = checksumAssetName is null ? null : checksumAssets[checksumAssetName];
+
         bool hasUpdate = !string.IsNullOrWhiteSpace(latestVer) &&
                          !string.IsNullOrWhiteSpace(assetUrl) &&
                          CompareVersions(latestVer, currentVersion) > 0;
@@ -270,29 +275,30 @@ public static class LauncherUpdater
             AssetUrl: assetUrl,
             AssetSizeBytes: assetSize,
             ChecksumsUrl: checksumsUrl,
-            CheckedAt: DateTime.UtcNow
+            CheckedAt: DateTime.UtcNow,
+            ChecksumAssetName: checksumAssetName
         );
     }
 
-    public static string? ParseExpectedSha256(string checksumsText, string assetFileName)
+    public static string? ParseExpectedSha256(string checksumsText, string assetFileName, bool allowBareHash = false)
     {
-        if (string.IsNullOrWhiteSpace(checksumsText)) return null;
-        string target = Path.GetFileName(assetFileName);
+        if (string.IsNullOrWhiteSpace(checksumsText) || string.IsNullOrWhiteSpace(assetFileName)) return null;
+        string? expected = null;
         foreach (var rawLine in checksumsText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
             var line = rawLine.Trim();
             if (line.Length < 64 || line.StartsWith('#')) continue;
-            var parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0) continue;
-            string hex = parts[0].Trim();
-            if (hex.Length != 64 || !IsHex(hex)) continue;
-            if (parts.Length == 1)
-                return hex.ToLowerInvariant();
-            string fname = Path.GetFileName(parts[^1].TrimStart('*'));
-            if (fname.Equals(target, StringComparison.OrdinalIgnoreCase))
-                return hex.ToLowerInvariant();
+            var parts = line.Split([' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries);
+            var hash = parts[0];
+            if (hash.Length != 64 || !IsHex(hash)) continue;
+            if (parts.Length == 1 ? !allowBareHash
+                : !parts[1].Trim().TrimStart('*').Equals(assetFileName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (expected is not null && !expected.Equals(hash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"Há checksums SHA-256 conflitantes para {assetFileName}.");
+            expected = hash.ToLowerInvariant();
         }
-        return null;
+        return expected;
     }
 
     static bool IsHex(string s) => s.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
@@ -309,6 +315,8 @@ public static class LauncherUpdater
             throw new InvalidOperationException("Feche o jogo antes de instalar a atualização.");
         if (string.IsNullOrWhiteSpace(release.AssetUrl))
             throw new InvalidOperationException("A versão encontrada não possui pacote .zip para Windows x64.");
+        if (string.IsNullOrWhiteSpace(release.ChecksumsUrl))
+            throw new InvalidDataException("A versão não publicou um manifesto SHA-256 para o pacote Windows x64.");
 
         string updatesRoot = Path.Combine(LauncherPaths.DataDir, "updates");
         string safeTag = SanitizeTag(release.LatestTag);
@@ -318,26 +326,15 @@ public static class LauncherUpdater
 
         try
         {
-            // 1. Optional SHA256SUMS.txt fetch
-            string? expectedSha256 = null;
-            if (!string.IsNullOrWhiteSpace(release.ChecksumsUrl))
-            {
-                onProgress?.Invoke(new UpdateProgress("Verificando manifesto", 3,
-                    "Baixando SHA256SUMS.txt da release..."));
-                try
-                {
-                    using var sumResp = await Http.GetAsync(release.ChecksumsUrl, ct);
-                    if (sumResp.IsSuccessStatusCode)
-                    {
-                        string sumTxt = await sumResp.Content.ReadAsStringAsync(ct);
-                        expectedSha256 = ParseExpectedSha256(sumTxt, release.AssetName);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LauncherLog.Write($"updater: warning reading SHA256SUMS.txt: {ex.Message}");
-                }
-            }
+            onProgress?.Invoke(new UpdateProgress("Verificando manifesto", 3,
+                "Baixando o manifesto SHA-256 da release..."));
+            using var sumResp = await Http.GetAsync(release.ChecksumsUrl, ct);
+            sumResp.EnsureSuccessStatusCode();
+            string sumTxt = await sumResp.Content.ReadAsStringAsync(ct);
+            bool singleAssetChecksum = (release.AssetName + ".sha256")
+                .Equals(release.ChecksumAssetName, StringComparison.OrdinalIgnoreCase);
+            string expectedSha256 = ParseExpectedSha256(sumTxt, release.AssetName, singleAssetChecksum)
+                ?? throw new InvalidDataException($"O manifesto SHA-256 não contém um checksum para {release.AssetName}.");
 
             // 2. Download zip with streaming progress
             onProgress?.Invoke(new UpdateProgress("Baixando atualização", 5,
@@ -374,10 +371,10 @@ public static class LauncherUpdater
 
             // 3. Verify SHA-256 checksum
             onProgress?.Invoke(new UpdateProgress("Validando integridade", 74,
-                expectedSha256 != null ? "Conferindo assinatura SHA-256 do pacote..." : "Verificando integridade do pacote ZIP..."));
+                "Conferindo o SHA-256 do pacote ZIP..."));
 
             string actualSha = await Task.Run(() => GameInstall.QuickSha256(zipPath), ct);
-            if (expectedSha256 != null && !actualSha.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
+            if (!actualSha.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidDataException(
                     $"Falha de integridade SHA-256 no pacote baixado (esperado {expectedSha256[..12]}…, obtido {actualSha[..12]}…).");
@@ -389,12 +386,12 @@ public static class LauncherUpdater
 
             await Task.Run(() => ExtractZipSafe(zipPath, stageDir, ct), ct);
 
-            // 5. Apply runtime + launcher update atomically
+            // 5. Commit the launcher and runtime together, with recovery on failure.
             onProgress?.Invoke(new UpdateProgress("Aplicando atualização", 90,
                 "Atualizando runtime, traduções, hints e launcher (saves e arquivos do jogo preservados)..."));
 
             var res = await Task.Run(() => ApplyStagedDirectory(
-                stageDir, projectRoot, installDir, runningLauncherExePath, release.LatestTag, allowSelfReplace: true), ct);
+                stageDir, projectRoot, installDir, runningLauncherExePath, release.LatestTag, allowSelfReplace: true, ct: ct), ct);
 
             LauncherLog.Write($"updater: applied {release.LatestTag} ({res.FilesUpdated} files, +{res.AddedHintsCount} hints, launcherReplaced={res.LauncherReplaced}, sha={actualSha[..12]})");
             onProgress?.Invoke(new UpdateProgress("Atualização aplicada", 100, res.Summary, IsDone: true));
@@ -441,8 +438,10 @@ public static class LauncherUpdater
         string installDir,
         string? runningLauncherExePath,
         string targetTag,
-        bool allowSelfReplace = true)
+        bool allowSelfReplace = true,
+        CancellationToken ct = default)
     {
+        using var transaction = new UpdateFileTransaction(projectRoot);
         string pkgRoot = ResolvePackageRoot(extractedRoot);
         string srcRuntime = Path.Combine(pkgRoot, "runtime");
         string srcLauncher = Path.Combine(pkgRoot, "Xenoblade2Launcher.exe");
@@ -462,7 +461,7 @@ public static class LauncherUpdater
         // 1. Update portable runtime/ folder (if present or in portable user layout)
         if (Directory.Exists(srcRuntime) && (Directory.Exists(dstPortableRuntime) || !isDevWorkspace))
         {
-            var (n, _, _) = SyncRuntimeIntoDir(srcRuntime, dstPortableRuntime, isGameInstallDir: false);
+            var (n, _, _) = PlanRuntimeUpdates(transaction, srcRuntime, dstPortableRuntime, isGameInstallDir: false, onlyChanged: false);
             filesUpdated += n;
         }
 
@@ -474,7 +473,7 @@ public static class LauncherUpdater
                 string s = Path.Combine(pkgRoot, doc);
                 if (File.Exists(s))
                 {
-                    CopyAtomic(s, Path.Combine(normProject, doc));
+                    transaction.Copy(s, Path.Combine(normProject, doc));
                     filesUpdated++;
                 }
             }
@@ -484,7 +483,7 @@ public static class LauncherUpdater
         if (Directory.Exists(srcRuntime) && Directory.Exists(normInstall) &&
             !normInstall.Equals(dstPortableRuntime, StringComparison.OrdinalIgnoreCase))
         {
-            var (n, added, total) = SyncRuntimeIntoDir(srcRuntime, normInstall, isGameInstallDir: true);
+            var (n, added, total) = PlanRuntimeUpdates(transaction, srcRuntime, normInstall, isGameInstallDir: true, onlyChanged: false);
             filesUpdated += n;
             addedHints = added;
             totalHints = total;
@@ -505,12 +504,14 @@ public static class LauncherUpdater
             if (Path.GetFileName(targetExe).Equals("Xenoblade2Launcher.exe", StringComparison.OrdinalIgnoreCase) &&
                 File.Exists(targetExe))
             {
-                ReplaceRunningExecutable(srcLauncher, targetExe);
+                transaction.Copy(srcLauncher, targetExe, launcher: true);
                 launcherReplaced = true;
                 newLauncherPath = targetExe;
                 filesUpdated++;
             }
         }
+
+        transaction.Commit(ct);
 
         string hintNote = addedHints > 0
             ? $" (+{addedHints} novos hints AOT — recomenda-se recompilar o código AOT em Configurações › Sistema)"
@@ -529,211 +530,78 @@ public static class LauncherUpdater
         );
     }
 
-    static (int FilesUpdated, int AddedHints, int TotalHints) SyncRuntimeIntoDir(
-        string srcRuntime,
-        string targetDir,
-        bool isGameInstallDir)
+    static (int FilesUpdated, int AddedHints, int TotalHints) PlanRuntimeUpdates(
+        UpdateFileTransaction transaction, string srcRuntime, string targetDir, bool isGameInstallDir, bool onlyChanged)
     {
-        int updated = 0;
-        Directory.CreateDirectory(targetDir);
+        int updated = 0, addedHints = 0, totalHints = 0;
 
-        // Executable
-        string srcExe = Path.Combine(srcRuntime, "xenoblade2.exe");
-        if (File.Exists(srcExe))
+        void CopyIfNeeded(string src, string dst)
         {
-            CopyAtomic(srcExe, Path.Combine(targetDir, "xenoblade2.exe"));
+            if (!File.Exists(src) || (onlyChanged && !FilesDiffer(src, dst))) return;
+            transaction.Copy(src, dst);
             updated++;
         }
 
-        // Open-source / runtime DLLs (never touches nvngx_dlss.dll)
-        foreach (var dll in UpdatableRuntimeDlls)
+        void CopyDirectory(string source, string destination)
         {
-            string s = Path.Combine(srcRuntime, dll);
-            if (File.Exists(s))
-            {
-                CopyAtomic(s, Path.Combine(targetDir, dll));
-                updated++;
-            }
+            if (!Directory.Exists(source)) return;
+            foreach (string file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+                CopyIfNeeded(file, Path.Combine(destination, Path.GetRelativePath(source, file)));
         }
 
-        // Hints: union merge preserving local user hints + adding new release hints
-        int addedHints = 0, totalHints = 0;
+        CopyIfNeeded(Path.Combine(srcRuntime, "xenoblade2.exe"), Path.Combine(targetDir, "xenoblade2.exe"));
+        foreach (string dll in UpdatableRuntimeDlls)
+            CopyIfNeeded(Path.Combine(srcRuntime, dll), Path.Combine(targetDir, dll));
+
         string srcHints = Path.Combine(srcRuntime, "xenoblade2.hints");
+        string dstHints = Path.Combine(targetDir, "xenoblade2.hints");
         if (File.Exists(srcHints))
         {
-            string dstHints = Path.Combine(targetDir, "xenoblade2.hints");
-            (totalHints, addedHints) = MergeHintsFile(dstHints, srcHints, dstHints);
-            if (addedHints > 0 || !File.Exists(dstHints)) updated++;
+            var (lines, added) = CollectHints(dstHints, srcHints);
+            (totalHints, addedHints) = (lines.Count, added);
+            if (added > 0 || !File.Exists(dstHints))
+            {
+                transaction.WriteHints(dstHints, lines);
+                updated++;
+            }
         }
 
-        // Data overlays base: runtime/<sub...> for portable runtime/, xenoblade2_data/<sub...> for game installDir
         string dstDataBase = isGameInstallDir ? Path.Combine(targetDir, "xenoblade2_data") : targetDir;
-
-        // PC UI native extensions (only DLLs + TSV; never overwrites user theme.bin / theme.png)
-        string srcPcUi = Path.Combine(srcRuntime, "pc_ui");
-        if (Directory.Exists(srcPcUi))
+        if (!onlyChanged || Directory.Exists(dstDataBase))
         {
-            string dstPcUi = Path.Combine(dstDataBase, "pc_ui");
-            foreach (var f in UpdatablePcUiFiles)
-            {
-                string s = Path.Combine(srcPcUi, f);
-                if (File.Exists(s))
-                {
-                    CopyAtomic(s, Path.Combine(dstPcUi, f));
-                    updated++;
-                }
-            }
+            foreach (string file in UpdatablePcUiFiles)
+                CopyIfNeeded(Path.Combine(srcRuntime, "pc_ui", file), Path.Combine(dstDataBase, "pc_ui", file));
+            foreach (string pack in UpdatableBundledPacks)
+                CopyDirectory(Path.Combine(srcRuntime, "localization", pack), Path.Combine(dstDataBase, "localization", pack));
+            CopyDirectory(Path.Combine(srcRuntime, "licenses"), Path.Combine(dstDataBase, "licenses"));
         }
-
-        // Bundled localization packs (pt-br, pt-br-jp only; never deletes or alters custom user mods)
-        foreach (var pack in UpdatableBundledPacks)
-        {
-            string srcPack = Path.Combine(srcRuntime, "localization", pack);
-            if (!Directory.Exists(srcPack)) continue;
-            string dstPack = Path.Combine(dstDataBase, "localization", pack);
-            foreach (var file in Directory.EnumerateFiles(srcPack, "*", SearchOption.AllDirectories))
-            {
-                string rel = Path.GetRelativePath(srcPack, file);
-                CopyAtomic(file, Path.Combine(dstPack, rel));
-                updated++;
-            }
-        }
-
-        // Licenses
-        string srcLic = Path.Combine(srcRuntime, "licenses");
-        if (Directory.Exists(srcLic))
-        {
-            string dstLic = Path.Combine(dstDataBase, "licenses");
-            foreach (var file in Directory.EnumerateFiles(srcLic, "*", SearchOption.AllDirectories))
-            {
-                string rel = Path.GetRelativePath(srcLic, file);
-                CopyAtomic(file, Path.Combine(dstLic, rel));
-                updated++;
-            }
-        }
-
         return (updated, addedHints, totalHints);
     }
 
-    /// <summary>
-    /// Ensures the active game install directory (e.g. games/) is running the exact runtime binaries,
-    /// extensions, localization packs, and AOT hints bundled in portable runtime/ next to the launcher.
-    /// Fixes users who extract a newer Release ZIP over an existing v0.1.0/v0.2.0 folder without manually
-    /// copying runtime/xenoblade2.exe into games/. Never touches romfs, addons, saves, exefs, INI, DLSS, or custom mods.
-    /// </summary>
+    /// <summary>Synchronizes a manually extracted portable update on startup or before launch.</summary>
     public static (int FilesUpdated, int AddedHints) SyncBundledRuntimeIfOutdated(string projectRoot, string installDir)
     {
-        if (string.IsNullOrWhiteSpace(projectRoot) || string.IsNullOrWhiteSpace(installDir))
+        if (string.IsNullOrWhiteSpace(projectRoot) || string.IsNullOrWhiteSpace(installDir) || GameRunner.IsGameRunning())
             return (0, 0);
-        if (GameRunner.IsGameRunning())
-            return (0, 0);
-
-        string normProject = Path.GetFullPath(projectRoot).TrimEnd('\\', '/');
-        string normInstall = Path.GetFullPath(installDir).TrimEnd('\\', '/');
+        string normProject = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot));
+        string normInstall = Path.TrimEndingDirectorySeparator(Path.GetFullPath(installDir));
         string srcRuntime = Path.Combine(normProject, "runtime");
-        string srcExe = Path.Combine(srcRuntime, "xenoblade2.exe");
-
-        if (!File.Exists(srcExe) || !Directory.Exists(normInstall))
-            return (0, 0);
-        if (normInstall.Equals(srcRuntime, StringComparison.OrdinalIgnoreCase))
+        using var transaction = new UpdateFileTransaction(normProject);
+        if (!File.Exists(Path.Combine(srcRuntime, "xenoblade2.exe")) || !Directory.Exists(normInstall) ||
+            normInstall.Equals(srcRuntime, StringComparison.OrdinalIgnoreCase))
             return (0, 0);
 
-        int updated = 0;
-        int addedHints = 0;
-
-        // 1. Runtime executable
-        string dstExe = Path.Combine(normInstall, "xenoblade2.exe");
-        if (FilesDiffer(srcExe, dstExe))
-        {
-            CopyAtomic(srcExe, dstExe);
-            updated++;
-        }
-
-        // 2. Open-source / runtime DLLs (never touches nvngx_dlss.dll)
-        foreach (var dll in UpdatableRuntimeDlls)
-        {
-            string s = Path.Combine(srcRuntime, dll);
-            if (!File.Exists(s)) continue;
-            string d = Path.Combine(normInstall, dll);
-            if (FilesDiffer(s, d))
-            {
-                CopyAtomic(s, d);
-                updated++;
-            }
-        }
-
-        // 3. Hints union merge (only rewrites file if new PCs were added)
-        string srcHints = Path.Combine(srcRuntime, "xenoblade2.hints");
-        if (File.Exists(srcHints))
-        {
-            string dstHints = Path.Combine(normInstall, "xenoblade2.hints");
-            bool existed = File.Exists(dstHints);
-            var (_, added) = MergeHintsFile(dstHints, srcHints, dstHints);
-            addedHints = added;
-            if (added > 0 || !existed) updated++;
-        }
-
-        string dstDataBase = Path.Combine(normInstall, "xenoblade2_data");
-        if (Directory.Exists(dstDataBase))
-        {
-            // 4. PC UI native extensions (only DLLs + TSV; never touches theme.bin / theme.png)
-            string srcPcUi = Path.Combine(srcRuntime, "pc_ui");
-            if (Directory.Exists(srcPcUi))
-            {
-                string dstPcUi = Path.Combine(dstDataBase, "pc_ui");
-                foreach (var f in UpdatablePcUiFiles)
-                {
-                    string s = Path.Combine(srcPcUi, f);
-                    if (!File.Exists(s)) continue;
-                    string d = Path.Combine(dstPcUi, f);
-                    if (FilesDiffer(s, d))
-                    {
-                        CopyAtomic(s, d);
-                        updated++;
-                    }
-                }
-            }
-
-            // 5. Bundled localization packs (pt-br, pt-br-jp only; never touches custom mods)
-            foreach (var pack in UpdatableBundledPacks)
-            {
-                string srcPack = Path.Combine(srcRuntime, "localization", pack);
-                if (!Directory.Exists(srcPack)) continue;
-                string dstPack = Path.Combine(dstDataBase, "localization", pack);
-                foreach (var file in Directory.EnumerateFiles(srcPack, "*", SearchOption.AllDirectories))
-                {
-                    string rel = Path.GetRelativePath(srcPack, file);
-                    string d = Path.Combine(dstPack, rel);
-                    if (FilesDiffer(file, d))
-                    {
-                        CopyAtomic(file, d);
-                        updated++;
-                    }
-                }
-            }
-
-            // 6. Licenses
-            string srcLic = Path.Combine(srcRuntime, "licenses");
-            if (Directory.Exists(srcLic))
-            {
-                string dstLic = Path.Combine(dstDataBase, "licenses");
-                foreach (var file in Directory.EnumerateFiles(srcLic, "*", SearchOption.AllDirectories))
-                {
-                    string rel = Path.GetRelativePath(srcLic, file);
-                    string d = Path.Combine(dstLic, rel);
-                    if (FilesDiffer(file, d))
-                    {
-                        CopyAtomic(file, d);
-                        updated++;
-                    }
-                }
-            }
-        }
-
+        var (updated, addedHints, _) = PlanRuntimeUpdates(transaction, srcRuntime, normInstall, isGameInstallDir: true, onlyChanged: true);
+        transaction.Commit();
         if (updated > 0)
             LauncherLog.Write($"runtime-sync: synced bundled runtime/ -> {normInstall} ({updated} file(s), +{addedHints} hints)");
 
         return (updated, addedHints);
+    }
+
+    public static void RecoverInterruptedUpdate(string projectRoot)
+    {
+        using var transaction = new UpdateFileTransaction(projectRoot);
     }
 
     static bool FilesDiffer(string src, string dst)
@@ -746,6 +614,19 @@ public static class LauncherUpdater
     }
 
     public static (int TotalCount, int AddedCount) MergeHintsFile(string existingPath, string incomingPath, string destPath)
+    {
+        var (ordered, added) = CollectHints(existingPath, incomingPath);
+        if (added > 0 || !File.Exists(destPath) || !Path.GetFullPath(existingPath).Equals(Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destPath))!);
+            string tmp = destPath + $".tmp.{Environment.ProcessId}";
+            File.WriteAllLines(tmp, ordered, new UTF8Encoding(false));
+            File.Move(tmp, destPath, overwrite: true);
+        }
+        return (ordered.Count, added);
+    }
+
+    static (List<string> Lines, int Added) CollectHints(string existingPath, string incomingPath)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ordered = new List<string>();
@@ -771,16 +652,7 @@ public static class LauncherUpdater
             }
         }
 
-        int added = ordered.Count - before;
-        if (added > 0 || !File.Exists(destPath) || !Path.GetFullPath(existingPath).Equals(Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destPath))!);
-            string tmp = destPath + $".tmp.{Environment.ProcessId}";
-            File.WriteAllLines(tmp, ordered, new UTF8Encoding(false));
-            File.Move(tmp, destPath, overwrite: true);
-        }
-
-        return (ordered.Count, added);
+        return (ordered, ordered.Count - before);
     }
 
     static string ResolvePackageRoot(string extractedRoot)
@@ -795,34 +667,6 @@ public static class LauncherUpdater
             return subDirs[0];
 
         return extractedRoot;
-    }
-
-    static void ReplaceRunningExecutable(string stagedNewExe, string targetExe)
-    {
-        string dir = Path.GetDirectoryName(targetExe)!;
-        string stagedBeside = Path.Combine(dir, $"Xenoblade2Launcher.exe.new.{Environment.ProcessId}");
-        string backupOld = targetExe + ".old";
-
-        File.Copy(stagedNewExe, stagedBeside, overwrite: true);
-        TryDeleteFile(backupOld);
-
-        try
-        {
-            File.Move(targetExe, backupOld, overwrite: true);
-            File.Move(stagedBeside, targetExe, overwrite: true);
-        }
-        catch
-        {
-            // Rollback if moving the new binary into place failed
-            try
-            {
-                if (!File.Exists(targetExe) && File.Exists(backupOld))
-                    File.Move(backupOld, targetExe, overwrite: true);
-            }
-            catch { }
-            TryDeleteFile(stagedBeside);
-            throw;
-        }
     }
 
     public static void CleanupPreviousBinary(string? currentExePath)
@@ -840,14 +684,6 @@ public static class LauncherUpdater
             p.WaitForExit(timeoutMs);
         }
         catch { }
-    }
-
-    static void CopyAtomic(string src, string dst)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
-        string tmp = dst + $".tmp.{Environment.ProcessId}";
-        File.Copy(src, tmp, overwrite: true);
-        File.Move(tmp, dst, overwrite: true);
     }
 
     static string SanitizeTag(string tag)

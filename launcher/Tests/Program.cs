@@ -708,6 +708,20 @@ try
         string fakeHash = new string('a', 64);
         Assert(LauncherUpdater.ParseExpectedSha256($"{fakeHash}  XC2Recomp-v0.2.0-win-x64.zip\n", "XC2Recomp-v0.2.0-win-x64.zip") == fakeHash,
             "SHA256SUMS parser extracts matching hash");
+        Assert(LauncherUpdater.ParseExpectedSha256($"{fakeHash}  other.zip\n", chk.AssetName) == null,
+            "SHA256SUMS must identify this zip");
+        Assert(LauncherUpdater.ParseExpectedSha256(fakeHash, chk.AssetName) == null &&
+               LauncherUpdater.ParseExpectedSha256(fakeHash, chk.AssetName, allowBareHash: true) == fakeHash,
+            "Bare SHA-256 is only valid for a checksum asset selected for this zip");
+
+        bool checksumRequired = false;
+        try
+        {
+            LauncherUpdater.DownloadAndApplyAsync(chk with { ChecksumsUrl = null }, tempRoot, tempRoot, null, null,
+                CancellationToken.None).GetAwaiter().GetResult();
+        }
+        catch (InvalidDataException) { checksumRequired = true; }
+        Assert(checksumRequired, "Updating without a checksum manifest must fail before downloading the zip");
 
         // Zip-Slip guard test
         var badZip = Path.Combine(tempRoot, "zipslip.zip");
@@ -794,6 +808,59 @@ try
         // Second call must be a 0-write no-op
         var (syncN2, syncH2) = LauncherUpdater.SyncBundledRuntimeIfOutdated(fakeRoot, fakeGames);
         Assert(syncN2 == 0 && syncH2 == 0, $"Second SyncBundledRuntimeIfOutdated must be 0-write no-op, got {syncN2}");
+
+        // A directory at a late target fails after earlier files have already been replaced.
+        string lateTarget = Path.Combine(fakeData, "pc_ui", "presence.dll");
+        Directory.CreateDirectory(lateTarget);
+        var newPack = Path.Combine(staged, "runtime", "localization", "pt-br-jp", "romfs");
+        Directory.CreateDirectory(newPack);
+        File.WriteAllText(Path.Combine(newPack, "bf2.arh"), "NEW_JP_PACK");
+        File.WriteAllText(Path.Combine(staged, "runtime", "pc_ui", "presence.dll"), "NEW_PRESENCE");
+        File.WriteAllText(Path.Combine(staged, "runtime", "xenoblade2.exe"), "NEXT_EXE");
+        File.WriteAllText(Path.Combine(staged, "runtime", "xenoblade2.hints"), "new_local_release_hint\n");
+        bool failedLate = false;
+        try
+        {
+            LauncherUpdater.ApplyStagedDirectory(staged, fakeRoot, fakeGames,
+                Path.Combine(fakeRoot, "Xenoblade2Launcher.exe"), "v0.3.0");
+        }
+        catch (IOException) { failedLate = true; }
+        Assert(failedLate, "A conflicting late destination must fail the update");
+        Assert(File.ReadAllText(Path.Combine(fakeGames, "xenoblade2.exe")) == "NEW_SNX_EXE_V020" &&
+               File.ReadAllText(Path.Combine(fakeRuntime, "xenoblade2.exe")) == "NEW_SNX_EXE_V020" &&
+               !File.ReadAllText(Path.Combine(fakeGames, "xenoblade2.hints")).Contains("new_local_release_hint") &&
+               !File.Exists(Path.Combine(fakeRuntime, "pc_ui", "presence.dll")) && Directory.Exists(lateTarget) &&
+               !Directory.Exists(Path.Combine(fakeRuntime, "localization", "pt-br-jp")) &&
+               !Directory.Exists(Path.Combine(fakeData, "localization", "pt-br-jp")) &&
+               !File.Exists(Path.Combine(fakeRoot, ".xc2-update.json")), "Failure rolls back old and newly added files across both directories");
+    });
+
+    Check("LauncherUpdater recovers a replacement interrupted between two renames", () =>
+    {
+        var root = Path.Combine(tempRoot, "upd_recover");
+        Directory.CreateDirectory(root);
+        var exe = Path.Combine(root, "Xenoblade2Launcher.exe");
+        var existing = Path.Combine(root, "existing.txt");
+        var added = Path.Combine(root, "added.txt");
+        var id = Guid.NewGuid().ToString("N");
+        var journal = Path.Combine(root, ".xc2-update.json");
+        File.WriteAllText(exe + ".old", "old launcher");
+        File.WriteAllText(exe + $".xc2-{id}.new", "new launcher");
+        File.WriteAllText(existing + $".xc2-{id}.bak", "old existing");
+        File.WriteAllText(existing, "new existing");
+        File.WriteAllText(added, "new file");
+        File.WriteAllText(journal, System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Id = id, Phase = "applying", Files = new[]
+            {
+                new { Destination = existing, HadOriginal = true, Launcher = false },
+                new { Destination = added, HadOriginal = false, Launcher = false },
+                new { Destination = exe, HadOriginal = true, Launcher = true },
+            }
+        }));
+        LauncherUpdater.RecoverInterruptedUpdate(root);
+        Assert(File.ReadAllText(exe) == "old launcher" && File.ReadAllText(existing) == "old existing" &&
+               !File.Exists(added) && !File.Exists(journal), "Interrupted replacements are recovered on the next startup");
     });
 }
 finally
