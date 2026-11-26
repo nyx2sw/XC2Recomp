@@ -54,7 +54,7 @@ public static class LauncherUpdater
 {
     public const string DefaultOwner = "nyx2sw";
     public const string DefaultRepo = "XC2Recomp";
-    public const string FallbackVersion = "0.2.0";
+    public const string FallbackVersion = "0.2.1";
 
     static readonly string[] UpdatableRuntimeDlls =
     [
@@ -613,6 +613,136 @@ public static class LauncherUpdater
         }
 
         return (updated, addedHints, totalHints);
+    }
+
+    /// <summary>
+    /// Ensures the active game install directory (e.g. games/) is running the exact runtime binaries,
+    /// extensions, localization packs, and AOT hints bundled in portable runtime/ next to the launcher.
+    /// Fixes users who extract a newer Release ZIP over an existing v0.1.0/v0.2.0 folder without manually
+    /// copying runtime/xenoblade2.exe into games/. Never touches romfs, addons, saves, exefs, INI, DLSS, or custom mods.
+    /// </summary>
+    public static (int FilesUpdated, int AddedHints) SyncBundledRuntimeIfOutdated(string projectRoot, string installDir)
+    {
+        if (string.IsNullOrWhiteSpace(projectRoot) || string.IsNullOrWhiteSpace(installDir))
+            return (0, 0);
+        if (GameRunner.IsGameRunning())
+            return (0, 0);
+
+        string normProject = Path.GetFullPath(projectRoot).TrimEnd('\\', '/');
+        string normInstall = Path.GetFullPath(installDir).TrimEnd('\\', '/');
+        string srcRuntime = Path.Combine(normProject, "runtime");
+        string srcExe = Path.Combine(srcRuntime, "xenoblade2.exe");
+
+        if (!File.Exists(srcExe) || !Directory.Exists(normInstall))
+            return (0, 0);
+        if (normInstall.Equals(srcRuntime, StringComparison.OrdinalIgnoreCase))
+            return (0, 0);
+
+        int updated = 0;
+        int addedHints = 0;
+
+        // 1. Runtime executable
+        string dstExe = Path.Combine(normInstall, "xenoblade2.exe");
+        if (FilesDiffer(srcExe, dstExe))
+        {
+            CopyAtomic(srcExe, dstExe);
+            updated++;
+        }
+
+        // 2. Open-source / runtime DLLs (never touches nvngx_dlss.dll)
+        foreach (var dll in UpdatableRuntimeDlls)
+        {
+            string s = Path.Combine(srcRuntime, dll);
+            if (!File.Exists(s)) continue;
+            string d = Path.Combine(normInstall, dll);
+            if (FilesDiffer(s, d))
+            {
+                CopyAtomic(s, d);
+                updated++;
+            }
+        }
+
+        // 3. Hints union merge (only rewrites file if new PCs were added)
+        string srcHints = Path.Combine(srcRuntime, "xenoblade2.hints");
+        if (File.Exists(srcHints))
+        {
+            string dstHints = Path.Combine(normInstall, "xenoblade2.hints");
+            bool existed = File.Exists(dstHints);
+            var (_, added) = MergeHintsFile(dstHints, srcHints, dstHints);
+            addedHints = added;
+            if (added > 0 || !existed) updated++;
+        }
+
+        string dstDataBase = Path.Combine(normInstall, "xenoblade2_data");
+        if (Directory.Exists(dstDataBase))
+        {
+            // 4. PC UI native extensions (only DLLs + TSV; never touches theme.bin / theme.png)
+            string srcPcUi = Path.Combine(srcRuntime, "pc_ui");
+            if (Directory.Exists(srcPcUi))
+            {
+                string dstPcUi = Path.Combine(dstDataBase, "pc_ui");
+                foreach (var f in UpdatablePcUiFiles)
+                {
+                    string s = Path.Combine(srcPcUi, f);
+                    if (!File.Exists(s)) continue;
+                    string d = Path.Combine(dstPcUi, f);
+                    if (FilesDiffer(s, d))
+                    {
+                        CopyAtomic(s, d);
+                        updated++;
+                    }
+                }
+            }
+
+            // 5. Bundled localization packs (pt-br, pt-br-jp only; never touches custom mods)
+            foreach (var pack in UpdatableBundledPacks)
+            {
+                string srcPack = Path.Combine(srcRuntime, "localization", pack);
+                if (!Directory.Exists(srcPack)) continue;
+                string dstPack = Path.Combine(dstDataBase, "localization", pack);
+                foreach (var file in Directory.EnumerateFiles(srcPack, "*", SearchOption.AllDirectories))
+                {
+                    string rel = Path.GetRelativePath(srcPack, file);
+                    string d = Path.Combine(dstPack, rel);
+                    if (FilesDiffer(file, d))
+                    {
+                        CopyAtomic(file, d);
+                        updated++;
+                    }
+                }
+            }
+
+            // 6. Licenses
+            string srcLic = Path.Combine(srcRuntime, "licenses");
+            if (Directory.Exists(srcLic))
+            {
+                string dstLic = Path.Combine(dstDataBase, "licenses");
+                foreach (var file in Directory.EnumerateFiles(srcLic, "*", SearchOption.AllDirectories))
+                {
+                    string rel = Path.GetRelativePath(srcLic, file);
+                    string d = Path.Combine(dstLic, rel);
+                    if (FilesDiffer(file, d))
+                    {
+                        CopyAtomic(file, d);
+                        updated++;
+                    }
+                }
+            }
+        }
+
+        if (updated > 0)
+            LauncherLog.Write($"runtime-sync: synced bundled runtime/ -> {normInstall} ({updated} file(s), +{addedHints} hints)");
+
+        return (updated, addedHints);
+    }
+
+    static bool FilesDiffer(string src, string dst)
+    {
+        if (!File.Exists(dst)) return true;
+        var si = new FileInfo(src);
+        var di = new FileInfo(dst);
+        if (si.Length != di.Length) return true;
+        return !GameInstall.QuickSha256(src).Equals(GameInstall.QuickSha256(dst), StringComparison.OrdinalIgnoreCase);
     }
 
     public static (int TotalCount, int AddedCount) MergeHintsFile(string existingPath, string incomingPath, string destPath)

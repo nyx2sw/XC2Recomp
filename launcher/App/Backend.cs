@@ -133,6 +133,21 @@ public sealed class Backend
         audio.WarmupAsync(config.MusicTrack);
         artwork.WarmupAsync();
         playing = GameRunner.IsGameRunning();
+
+        // Automatically keep active games/ runtime in sync with bundled runtime/ (fixes manual ZIP extracts over v0.1.0)
+        int autoSyncedFiles = 0;
+        if (!playing)
+        {
+            try
+            {
+                var (n, _) = LauncherUpdater.SyncBundledRuntimeIfOutdated(projectRoot, install.InstallDir);
+                autoSyncedFiles = n;
+                if (n > 0)
+                    install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: false);
+            }
+            catch (Exception ex) { LauncherLog.Write($"runtime-sync startup warning: {ex.Message}"); }
+        }
+
         PushFullState(includeHashes: false);
         // Compute binary SHA-256 hashes asynchronously so initial render is instant
         Task.Run(() =>
@@ -147,6 +162,13 @@ public sealed class Backend
                 ? $"Atualizado para {justUpdatedVersion}! Novos hints AOT disponíveis em Configurações › Sistema."
                 : $"Launcher e runtime atualizados para {justUpdatedVersion} com sucesso!";
             Toast(hintMsg, "decide");
+        }
+        else if (autoSyncedFiles > 0)
+        {
+            string msg = install.HintsNewerThanAot
+                ? $"Runtime atualizado automaticamente ({autoSyncedFiles} arquivos). Novos hints AOT disponíveis em Configurações › Sistema."
+                : $"Runtime da pasta do jogo sincronizado automaticamente com a versão v{LauncherUpdater.CurrentVersion} ({autoSyncedFiles} arquivos).";
+            Toast(msg, "decide");
         }
 
         // Silent background update check on startup (skipped in automated visual QA screenshot mode)
@@ -478,6 +500,14 @@ public sealed class Backend
     {
         if (!install.IsReadyToPlay)
             throw new InvalidOperationException("Instalação incompleta: verifique xenoblade2.exe, xenoblade2_code.dll e romfs.");
+
+        try
+        {
+            var (synced, _) = LauncherUpdater.SyncBundledRuntimeIfOutdated(projectRoot, install.InstallDir);
+            if (synced > 0)
+                install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: false);
+        }
+        catch (Exception ex) { LauncherLog.Write($"runtime-sync pre-launch warning: {ex.Message}"); }
 
         GameRunner.SyncPresetToIni(install, config, hardware);
         var plan = GameRunner.BuildPlan(install, config, hardware);
@@ -867,6 +897,8 @@ public sealed class Backend
 
         config.InstallPath = dir;
         config.Save();
+        try { LauncherUpdater.SyncBundledRuntimeIfOutdated(projectRoot, dir); }
+        catch (Exception ex) { LauncherLog.Write($"runtime-sync switch warning: {ex.Message}"); }
         install = GameInstall.Inspect(dir, projectRoot, computeHashes: true);
         hardware = SystemProbe.Probe(install.InstallDir);
         audio = new GameAudio(install.RomfsDir, LauncherPaths.MediaCacheDir);

@@ -780,6 +780,20 @@ try
 
         LauncherUpdater.CleanupPreviousBinary(Path.Combine(fakeRoot, "Xenoblade2Launcher.exe"));
         Assert(!File.Exists(Path.Combine(fakeRoot, "Xenoblade2Launcher.exe.old")), ".old cleaned up on startup");
+
+        // SyncBundledRuntimeIfOutdated: simulates user manually extracting a new ZIP over an old v0.1.0 games/ dir
+        File.WriteAllText(Path.Combine(fakeGames, "xenoblade2.exe"), "STALE_V010_EXE");
+        File.WriteAllText(Path.Combine(fakeData, "pc_ui", "native_ui.dll"), "STALE_V010_UI");
+        var (syncN1, syncH1) = LauncherUpdater.SyncBundledRuntimeIfOutdated(fakeRoot, fakeGames);
+        Assert(syncN1 == 2 && syncH1 == 0, $"SyncBundledRuntimeIfOutdated should update exactly 2 stale files, got {syncN1} (+{syncH1} hints)");
+        Assert(File.ReadAllText(Path.Combine(fakeGames, "xenoblade2.exe")) == "NEW_SNX_EXE_V020", "Stale games/xenoblade2.exe auto-upgraded from runtime/");
+        Assert(File.ReadAllText(Path.Combine(fakeData, "pc_ui", "native_ui.dll")) == "NEW_UI_DLL", "Stale native_ui.dll auto-upgraded from runtime/");
+        Assert(File.ReadAllText(Path.Combine(fakeGames, "nvngx_dlss.dll")) == "USER_NVIDIA_DLSS", "nvngx_dlss.dll still preserved after runtime sync");
+        Assert(File.ReadAllText(Path.Combine(fakeData, "save", "user", "bf2savefile.sav")) == "USER_SAVE_DATA", "save still preserved after runtime sync");
+
+        // Second call must be a 0-write no-op
+        var (syncN2, syncH2) = LauncherUpdater.SyncBundledRuntimeIfOutdated(fakeRoot, fakeGames);
+        Assert(syncN2 == 0 && syncH2 == 0, $"Second SyncBundledRuntimeIfOutdated must be 0-write no-op, got {syncN2}");
     });
 }
 finally

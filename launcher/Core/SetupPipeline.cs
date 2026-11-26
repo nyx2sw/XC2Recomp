@@ -396,8 +396,13 @@ public sealed class NativeSetupPipeline : ISetupPipeline
             .ToArray();
 
         string targetExe = Path.Combine(targetDir, "xenoblade2.exe");
-        if (!File.Exists(targetExe) && !string.IsNullOrEmpty(compilerExe) && File.Exists(compilerExe))
-            CopyAtomic(compilerExe, targetExe);
+        if (!string.IsNullOrEmpty(compilerExe) && File.Exists(compilerExe) && !PathsEqual(compilerExe, targetExe))
+        {
+            bool needsExe = !File.Exists(targetExe) ||
+                            new FileInfo(compilerExe).Length != new FileInfo(targetExe).Length ||
+                            !GameInstall.QuickSha256(compilerExe).Equals(GameInstall.QuickSha256(targetExe), StringComparison.OrdinalIgnoreCase);
+            if (needsExe) CopyAtomic(compilerExe, targetExe);
+        }
 
         foreach (var dll in RuntimeDlls)
         {
