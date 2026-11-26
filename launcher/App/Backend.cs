@@ -128,6 +128,10 @@ public sealed class Backend
         }
     }
 
+    (int FilesUpdated, int AddedHints) SyncBundledRuntime(string installDir) =>
+        LauncherUpdater.SyncBundledRuntimeIfOutdated(projectRoot, installDir,
+            file => typeof(Backend).Assembly.GetManifestResourceStream($"pc_ui/{file}"));
+
     void HandleReady()
     {
         audio.WarmupAsync(config.MusicTrack);
@@ -140,7 +144,7 @@ public sealed class Backend
         {
             try
             {
-                var (n, _) = LauncherUpdater.SyncBundledRuntimeIfOutdated(projectRoot, install.InstallDir);
+                var (n, _) = SyncBundledRuntime(install.InstallDir);
                 autoSyncedFiles = n;
                 if (n > 0)
                     install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: false);
@@ -508,7 +512,7 @@ public sealed class Backend
 
         try
         {
-            var (synced, _) = LauncherUpdater.SyncBundledRuntimeIfOutdated(projectRoot, install.InstallDir);
+            var (synced, _) = SyncBundledRuntime(install.InstallDir);
             if (synced > 0)
                 install = GameInstall.Inspect(install.InstallDir, projectRoot, computeHashes: false);
         }
@@ -904,7 +908,7 @@ public sealed class Backend
 
         config.InstallPath = dir;
         config.Save();
-        try { LauncherUpdater.SyncBundledRuntimeIfOutdated(projectRoot, dir); }
+        try { SyncBundledRuntime(dir); }
         catch (Exception ex) { LauncherLog.Write($"runtime-sync switch warning: {ex.Message}"); }
         install = GameInstall.Inspect(dir, projectRoot, computeHashes: true);
         hardware = SystemProbe.Probe(install.InstallDir);

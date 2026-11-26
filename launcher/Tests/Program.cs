@@ -678,6 +678,41 @@ try
         Console.WriteLine($"       ShaderCatalogBuilder C# parity OK: {res.UniqueShaders:N0} shaders ({res.SizeBytes / 1048576.0:F1} MiB) in {res.ElapsedSeconds:F1}s");
     });
 
+    Check("Launcher restores a complete original-menu overlay after a legacy update", () =>
+    {
+        var root = Path.Combine(tempRoot, "legacy-menu-update");
+        var runtime = Path.Combine(root, "runtime");
+        var games = Path.Combine(root, "games");
+        var installed = Path.Combine(games, "xenoblade2_data", "pc_ui");
+        Directory.CreateDirectory(installed);
+        var files = new[] { "original_menu/base_archive.txt", "original_menu/romfs/bf2.arh", "original_menu/romfs/bf2.ard.append" };
+        string Portable(string file) => Path.Combine(runtime, "pc_ui", file);
+        Stream OpenResource(string file) => new MemoryStream(Encoding.UTF8.GetBytes(file));
+        Directory.CreateDirectory(Path.GetDirectoryName(Portable(files[0]))!);
+        File.WriteAllText(Path.Combine(runtime, "xenoblade2.exe"), "UPDATED_RUNTIME");
+        File.WriteAllText(Path.Combine(games, "xenoblade2.exe"), "UPDATED_RUNTIME");
+        File.WriteAllText(Portable(files[0]), "PARTIAL_OLD_OVERLAY");
+
+        bool failed = false;
+        try
+        {
+            LauncherUpdater.SyncBundledRuntimeIfOutdated(root, games, file => file == files[2] ? null : OpenResource(file));
+        }
+        catch (InvalidDataException) { failed = true; }
+        Assert(failed && File.ReadAllText(Portable(files[0])) == "PARTIAL_OLD_OVERLAY" &&
+               !File.Exists(Portable(files[1])) && !File.Exists(Path.Combine(installed, files[0])),
+               "A missing resource must leave the partial old overlay and active install untouched");
+
+        var (copied, _) = LauncherUpdater.SyncBundledRuntimeIfOutdated(root, games, OpenResource);
+        Assert(copied == 3, "The first start after a legacy update must install the whole overlay");
+        foreach (var file in files)
+            Assert(File.ReadAllText(Portable(file)) == file && File.ReadAllText(Path.Combine(installed, file)) == file,
+                   $"Both locations must contain the exact bundled {file}");
+        var (copiedAgain, _) = LauncherUpdater.SyncBundledRuntimeIfOutdated(root, games,
+            _ => throw new InvalidOperationException("Complete portable overlay must take precedence"));
+        Assert(copiedAgain == 0, "The next start must be a no-op");
+    });
+
     Check("LauncherUpdater compares SemVer, parses GitHub release JSON/SHA256SUMS, blocks Zip-Slip, merges hints, and preserves user data", () =>
     {
         Assert(LauncherUpdater.CompareVersions("v0.2.0", "0.1.0") > 0, "0.2.0 > 0.1.0");

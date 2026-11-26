@@ -61,7 +61,7 @@ This checks `launcher/ui/app.js` syntax, runs `XC2.Core.Tests`, and publishes a 
 
 This stages `Xenoblade2Launcher.exe` and its `runtime/` dependencies. The archive excludes game packages, saves, and compiled game code. Optional overlays supplied at build time are included as separate resource packs.
 
-For a package with the native PC menu available in the original language, pass `-GameRomfsDir` with the original 3.0.1 RomFS and `-PcUiAssetsDir` with the prepared native-menu assets. The packager reads the base index, makes a menu-only overlay in `runtime/pc_ui/original_menu`, and records the base index checksum and archive length. Pass `-LocalizationSourceDir` to include the two PT-BR overlays.
+For a package with the native PC menu available in the original language, pass `-GameRomfsDir` with the original 3.0.1 RomFS and `-PcUiAssetsDir` with the prepared native-menu assets. The packager reads the base index, makes a menu-only overlay in `runtime/pc_ui/original_menu`, and records the base index checksum and archive length. The packager also embeds those files in the launcher so the first start after an update from 0.2.2 can restore the overlay before synchronizing the installation. Pass `-LocalizationSourceDir` to include the two PT-BR overlays.
 
 The export includes `release-manifest.json` with both Git commits, hashes of any working-tree changes, packaged file hashes, and the packager's test results. Pass `-RuntimeTestLog` with a passing CTest log from the runtime build. With `-Zip`, the packager also writes a matching `<zip>.sha256` file. Upload the ZIP and its checksum together for the launcher updater to accept the version.
 

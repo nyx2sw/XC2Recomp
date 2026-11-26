@@ -54,7 +54,7 @@ public static class LauncherUpdater
 {
     public const string DefaultOwner = "nyx2sw";
     public const string DefaultRepo = "XC2Recomp";
-    public const string FallbackVersion = "0.2.3";
+    public const string FallbackVersion = "0.2.4";
 
     static readonly string[] UpdatableRuntimeDlls =
     [
@@ -63,10 +63,14 @@ public static class LauncherUpdater
         "snx_dlss.dll"
     ];
 
+    static readonly string[] OriginalMenuFiles =
+    [
+        "original_menu/base_archive.txt", "original_menu/romfs/bf2.arh", "original_menu/romfs/bf2.ard.append"
+    ];
+
     static readonly string[] UpdatablePcUiFiles =
     [
-        "native_ui.dll", "presence.dll", "presence_names.tsv",
-        "original_menu/base_archive.txt", "original_menu/romfs/bf2.arh", "original_menu/romfs/bf2.ard.append"
+        "native_ui.dll", "presence.dll", "presence_names.tsv", ..OriginalMenuFiles
     ];
 
     static readonly string[] UpdatableBundledPacks = ["pt-br", "pt-br-jp"];
@@ -579,13 +583,17 @@ public static class LauncherUpdater
     }
 
     /// <summary>Synchronizes a manually extracted portable update on startup or before launch.</summary>
-    public static (int FilesUpdated, int AddedHints) SyncBundledRuntimeIfOutdated(string projectRoot, string installDir)
+    public static (int FilesUpdated, int AddedHints) SyncBundledRuntimeIfOutdated(
+        string projectRoot, string installDir, Func<string, Stream?>? openOriginalMenuResource = null)
     {
         if (string.IsNullOrWhiteSpace(projectRoot) || string.IsNullOrWhiteSpace(installDir) || GameRunner.IsGameRunning())
             return (0, 0);
         string normProject = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot));
         string normInstall = Path.TrimEndingDirectorySeparator(Path.GetFullPath(installDir));
         string srcRuntime = Path.Combine(normProject, "runtime");
+        if (openOriginalMenuResource != null && File.Exists(Path.Combine(srcRuntime, "xenoblade2.exe")))
+            RestoreBundledOriginalMenu(normProject, srcRuntime, openOriginalMenuResource);
+
         using var transaction = new UpdateFileTransaction(normProject);
         if (!File.Exists(Path.Combine(srcRuntime, "xenoblade2.exe")) || !Directory.Exists(normInstall) ||
             normInstall.Equals(srcRuntime, StringComparison.OrdinalIgnoreCase))
@@ -597,6 +605,27 @@ public static class LauncherUpdater
             LauncherLog.Write($"runtime-sync: synced bundled runtime/ -> {normInstall} ({updated} file(s), +{addedHints} hints)");
 
         return (updated, addedHints);
+    }
+
+    // Launchers through 0.2.2 replace the launcher EXE but omit the original-menu files.
+    // Recover the complete overlay from the new EXE before the regular runtime sync.
+    static void RestoreBundledOriginalMenu(string projectRoot, string runtimeDir, Func<string, Stream?> openResource)
+    {
+        string pcUiDir = Path.Combine(runtimeDir, "pc_ui");
+        if (OriginalMenuFiles.All(file => File.Exists(Path.Combine(pcUiDir, file)))) return;
+
+        using var descriptor = openResource(OriginalMenuFiles[0]);
+        if (descriptor == null) return; // Builds without an original-menu overlay
+
+        using var transaction = new UpdateFileTransaction(projectRoot);
+        if (OriginalMenuFiles.All(file => File.Exists(Path.Combine(pcUiDir, file)))) return;
+        foreach (string file in OriginalMenuFiles)
+        {
+            transaction.Copy(() => openResource(file) ??
+                throw new InvalidDataException($"Recurso do menu original ausente: {file}"), Path.Combine(pcUiDir, file));
+        }
+        transaction.Commit();
+        LauncherLog.Write("runtime-sync: restored original PC menu from launcher resources");
     }
 
     public static void RecoverInterruptedUpdate(string projectRoot)

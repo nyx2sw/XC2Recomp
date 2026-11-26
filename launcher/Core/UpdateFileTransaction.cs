@@ -39,6 +39,14 @@ sealed class UpdateFileTransaction : IDisposable
     public void Copy(string source, string destination, bool launcher = false) =>
         Add(destination, path => File.Copy(source, path), launcher);
 
+    public void Copy(Func<Stream> openSource, string destination) =>
+        Add(destination, path =>
+        {
+            using var source = openSource();
+            using var target = File.Open(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            source.CopyTo(target);
+        });
+
     public void WriteHints(string destination, List<string> lines) =>
         Add(destination, path => File.WriteAllLines(path, lines, new UTF8Encoding(false)));
 

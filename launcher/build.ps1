@@ -2,7 +2,8 @@
 param(
     [switch]$SkipPublish,
     [switch]$SkipTests,
-    [string]$IconPath = ""
+    [string]$IconPath = "",
+    [string]$OriginalMenuOverlayDir = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,9 +23,15 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw "Tests failed ($LASTEXITCODE)" }
 }
 
+$overlayArgs = @()
+if ($OriginalMenuOverlayDir) {
+    $overlay = (Resolve-Path -LiteralPath $OriginalMenuOverlayDir).Path
+    $overlayArgs += "-p:OriginalMenuOverlayDir=$overlay"
+}
+
 if ($SkipPublish) {
     Write-Host "==> Building XC2.Launcher (Release)..." -ForegroundColor Cyan
-    dotnet build (Join-Path $here 'App\XC2.Launcher.csproj') -c Release
+    dotnet build (Join-Path $here 'App\XC2.Launcher.csproj') -c Release @overlayArgs
     if ($LASTEXITCODE -ne 0) { throw "Build failed ($LASTEXITCODE)" }
     return
 }
@@ -38,7 +45,7 @@ if ($IconPath) {
     $pubArgs += "-p:ApplicationIcon=$resolvedIcon"
     Write-Host "    Embedding icon: $resolvedIcon" -ForegroundColor DarkCyan
 }
-& dotnet @pubArgs
+& dotnet @pubArgs @overlayArgs
 if ($LASTEXITCODE -ne 0) { throw "Publish failed ($LASTEXITCODE)" }
 
 $builtExe = Join-Path $pubDir 'Xenoblade2Launcher.exe'

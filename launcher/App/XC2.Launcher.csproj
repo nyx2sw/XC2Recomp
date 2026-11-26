@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <NoWarn>$(NoWarn);MSB3277</NoWarn>
-    <Version>0.2.3</Version>
+    <Version>0.2.4</Version>
     <Product>Xenoblade Chronicles 2: PC Edition Launcher</Product>
     <Deterministic>true</Deterministic>
     <PathMap>$(MSBuildProjectDirectory)=/src/launcher/App</PathMap>
@@ -35,5 +35,10 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\ui\**\*" LogicalName="ui/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(OriginalMenuOverlayDir)' != ''">
+    <EmbeddedResource Include="$(OriginalMenuOverlayDir)/base_archive.txt" LogicalName="pc_ui/original_menu/base_archive.txt" />
+    <EmbeddedResource Include="$(OriginalMenuOverlayDir)/romfs/bf2.arh" LogicalName="pc_ui/original_menu/romfs/bf2.arh" />
+    <EmbeddedResource Include="$(OriginalMenuOverlayDir)/romfs/bf2.ard.append" LogicalName="pc_ui/original_menu/romfs/bf2.ard.append" />
   </ItemGroup>
 </Project>

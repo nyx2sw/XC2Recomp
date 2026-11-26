@@ -47,10 +47,22 @@ $sources = [ordered]@{ launcher = (Get-SourceState $repoRoot); runtime = (Get-So
 $snxExe = Join-Path $SnxBuildDir 'scarletnx.exe'
 if (-not (Test-Path $snxExe)) { throw "Built scarletnx.exe not found at $snxExe" }
 
+$extOut = Join-Path $OutDir 'runtime\pc_ui'
+New-Item -ItemType Directory -Path $extOut, (Join-Path $OutDir 'runtime\licenses') -Force | Out-Null
+
+# Build the overlay before the launcher so legacy updaters can carry it in the EXE.
+$originalMenuOverlayDir = ''
+if ($GameRomfsDir) {
+    $originalMenuOverlayDir = Join-Path $extOut 'original_menu'
+    & python -B (Join-Path $repoRoot 'tools/build_pc_ui_overlay.py') $GameRomfsDir $PcUiAssetsDir $originalMenuOverlayDir
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar o overlay do menu de PC.' }
+}
+
 # 1. Build Launcher
 Write-Host "==> Building Xenoblade2Launcher.exe..." -ForegroundColor Cyan
 $launcherBuildArgs = @{}
 if ($IconPath) { $launcherBuildArgs['IconPath'] = $IconPath }
+if ($originalMenuOverlayDir) { $launcherBuildArgs['OriginalMenuOverlayDir'] = $originalMenuOverlayDir }
 & (Join-Path $repoRoot 'launcher\build.ps1') @launcherBuildArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -58,8 +70,6 @@ $launcherExe = Join-Path $repoRoot 'launcher\out\win-x64\Xenoblade2Launcher.exe'
 if (-not (Test-Path $launcherExe)) { throw "Published launcher not found at $launcherExe" }
 
 # 2. Build native extensions
-$extOut = Join-Path $OutDir 'runtime\pc_ui'
-New-Item -ItemType Directory -Path $extOut, (Join-Path $OutDir 'runtime\licenses') -Force | Out-Null
 
 & (Join-Path $repoRoot 'extensions\native_ui\build.ps1') -SnxRoot $SnxRoot -OutDir $extOut -Strip $Strip
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -67,10 +77,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Remove-Item (Join-Path $extOut 'test_model.exe'), (Join-Path $extOut 'model_test.exe') -Force -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $repoRoot 'extensions\presence\presence_names.tsv') (Join-Path $extOut 'presence_names.tsv') -Force
-if ($GameRomfsDir) {
-    & python -B (Join-Path $repoRoot 'tools/build_pc_ui_overlay.py') $GameRomfsDir $PcUiAssetsDir (Join-Path $extOut 'original_menu')
-    if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar o overlay do menu de PC.' }
-}
 
 # 3. Stage Launcher + Stripped Runtime + Open-source Runtime DLLs
 $rtDir = Join-Path $OutDir 'runtime'
