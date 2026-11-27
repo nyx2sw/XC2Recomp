@@ -1,109 +1,41 @@
-# XC2Recomp — Xenoblade Chronicles 2: PC Edition
+# Xenoblade Chronicles 2: PC Edition
 
-A native Windows PC launcher, First-Run `.nup` setup pipeline, and runtime extensions for **Xenoblade Chronicles 2 — Nintendo Switch 2 Edition (v3.0.1)**, powered by a customized fork of [ScarletNX](https://github.com/scarletnx/ScarletNX) (derived from **SwitchRecomp by MZ Labs**).
+[Read this in English](#english)
 
-> **Legal Notice — Bring Your Own Game**
->
-> This repository contains **only original source code, build scripts, and clean-room tooling**.
-> **No copyrighted game files, ROMs, `.nup`/`.nsp`/`.xci` packages, shaders, artwork, audio, saves, encryption keys, or console firmware are included or distributed.**
-> To use this software, you must supply your own legally obtained *Xenoblade Chronicles 2 — Nintendo Switch 2 Edition (v3.0.1)* `.nup` dump (`Title ID: 0400E95004038001`).
+Criamos o XC2Recomp para jogar **Xenoblade Chronicles 2 — Nintendo Switch 2 Edition** no Windows, com tradução para português do Brasil e opções de gráficos dentro do próprio jogo. Você traz uma cópia extraída do seu jogo, e o launcher cuida da primeira instalação.
 
----
+## Como jogar
 
-## Sobre o Projeto (Português)
+1. Baixe o ZIP portátil para Windows na [página de releases](https://github.com/nyx2sw/XC2Recomp/releases/latest) e extraia em uma pasta num disco com pelo menos **40 GiB livres**.
+2. Abra `Xenoblade2Launcher.exe` e selecione o arquivo `.nup` da **Nintendo Switch 2 Edition 3.0.1** que você extraiu do seu jogo.
+3. Inicie a instalação e deixe o launcher preparar o jogo. Se o pacote incluir *Torna: The Golden Country* ou outros extras, o launcher prepara esse conteúdo também.
 
-**XC2Recomp** é um projeto independente que traz *Xenoblade Chronicles 2 — Nintendo Switch 2 Edition (v3.0.1)* de forma nativa para PC (Windows), com recompilação estática (AOT), launcher próprio e melhorias modernas de imagem e desempenho — incluindo resoluções até 4K, 60–240 FPS, DLSS 4.5 / FSR 3.1, menu nativo de opções de PC dentro do jogo, backup automático de saves e integração com Discord e Steam.
+Você vai precisar de Windows 10 ou 11 de 64 bits, um processador com AVX2 e FMA, drivers gráficos com suporte a Vulkan e o Microsoft Edge WebView2 Runtime.
 
-A versão pronta na aba **Releases** já acompanha a **tradução e localização completa em Português do Brasil (PT-BR)**, pronta para usar assim que você aplica o seu arquivo `.nup`, com troca em 1 clique no launcher sem alterar os arquivos originais do jogo:
+Se você já tem o jogo instalado, pode atualizar pelo próprio launcher. Seus saves e configurações ficam na instalação.
 
-- **PT-BR (Localização Ocidental):** textos, menus, interface e diálogos completos em português mantendo os nomes oficiais do ocidente (*Pyra, Mythra, Malos, Morag, Alrest*).
-- **PT-BR (Nomes Originais JP):** tradução completa preservando os nomes originais do roteiro japonês (*Homura, Hikari, Metsu, Meleph, Alst*), pensada especialmente para quem joga com áudio em japonês.
-- **Original do Jogo:** permite voltar ao texto original intacto quando quiser.
+## O que dá para ajustar
 
-> Basta baixar o pacote da Release, abrir o `Xenoblade2Launcher.exe` e arrastar/selecionar o seu arquivo `.nup` da Switch 2 Edition 3.0.1 — o instalador cuida da extração, das expansões (incluindo *Torna*), da compilação e ativa as artes, trilha sonora, efeitos e tradução automaticamente.
+- **Idioma.** Jogue em português com os nomes ocidentais, como Pyra e Mythra, ou com os nomes japoneses, como Homura e Hikari. Você também pode voltar ao texto original pelo launcher.
+- **Imagem e desempenho.** Abra as Configurações de PC em **Sistema → Opções** para ajustar a resolução (até 4K), o limite de FPS e a qualidade de imagem. As opções de DLSS, DLAA, FSR e XeSS dependem do hardware e da configuração. Em **Configurações → Vídeo** no launcher, você pode preparar os shaders com antecedência para reduzir engasgos durante o jogo.
+- **Saves e atalhos.** O launcher faz backup dos saves, importa saves compatíveis, adiciona um atalho à Steam e pode mostrar no Discord o que você está jogando.
 
----
+## English
 
-## Highlights
+XC2Recomp brings **Xenoblade Chronicles 2 — Nintendo Switch 2 Edition** to Windows with an in-game PC settings menu and a Brazilian Portuguese translation. You can also play with the game's original text.
 
-- **Guided First-Run `.nup` Setup Pipeline** (`XC2.Core`):
-  - Validates NUP v1 header, Title ID (`0400E95004038001`), and TOC + per-file SHA-256 integrity.
-  - Streaming Zstd extraction of ExeFS, RomFS, and `control.nacp` (v3.0.1).
-  - Clean-room C# `exefs/subsdk1` stub generator (reads only Build ID and exported symbol names from `exefs_host_bypass/subsdk1` to expose dynamic NVN2 thunk slots).
-  - Deterministic Nintendo Switch Horizon `.romfs` builder for Add-On Content (Torna, Expansion Pass packs, JP Voice Pack).
-  - Automatic AOT recompilation (`Ounce64 → x86-64-v3 AVX2/FMA`) with pre-seeded indirect-branch hints (`xenoblade2.hints`).
-- **Native Win32 + WebView2 Launcher** (`XC2.Launcher`):
-  - Zero Electron overhead; keyboard + Xbox/DualSense/Switch Pro gamepad navigation.
-  - Hardware-aware preset recommendations (NVIDIA DLSS 4.5 / DLAA, AMD FSR 3.1, Intel XeSS, 60–240 FPS, up to 4K).
-  - Live `xenoblade2.ini` hot-reload while playing.
-  - Safe atomic save backups, Switch emulator save import, mod/localization manager, and byte-exact Steam non-Steam shortcut integration.
-  - Pure managed C# runtime media extractor reading artwork (`bf2.arh`/`bf2.ard`), BGM (`.nop`), and UI SFX (`system.pck`) directly from the player's own extracted `romfs` (zero copyrighted media embedded in the repository).
-  - Optional 1-click **NVIDIA DLSS 4.5 / DLAA** installer (on-demand download directly from NVIDIA's official `NVIDIA/DLSS` repository with Windows Authenticode verification — never redistributed in this repo/zip).
-  - Optional built-in pure C# **Shader Catalog Builder** (`xc2_shaders.snxs`) in Onboarding & Settings to pre-compile shaders once from the user's own `romfs` + expansions (no Python needed).
-  - Built-in **Auto-Updater** (GitHub Releases with `SHA256SUMS.txt` verification, Zip-Slip protection, atomic runtime/translation/hints updates, and 1-click AOT recompilation while strictly preserving user ROMs, saves, INI, DLSS, and custom mods).
-- **Native Runtime Extensions** (`extensions/`):
-  - `native_ui.dll`: In-game PC Settings extension (`System → Options`), gracefully preserving original menus when custom layout assets are absent.
-  - `presence.dll`: Discord Rich Presence showing live region, landmark, Driver, Blade, and session timer.
+1. Extract the portable Windows ZIP from the [latest release](https://github.com/nyx2sw/XC2Recomp/releases/latest) to a drive with at least **40 GiB free**.
+2. Open `Xenoblade2Launcher.exe`, select your own **Switch 2 Edition 3.0.1 `.nup`** dump, and start the setup. The launcher also sets up *Torna: The Golden Country* and other add-ons included in your dump.
+3. Once you're in the game, open **System → Options** for PC graphics settings. The launcher can prepare shaders ahead of time to help reduce stutter and can install updates while keeping your saves and settings.
 
----
+You'll need 64-bit Windows 10 or 11, an AVX2/FMA-capable CPU, Vulkan drivers, and the Microsoft Edge WebView2 Runtime.
 
-## Quick Start (Pre-built Release)
+The launcher can also import compatible saves, add a Steam shortcut, and share what you're playing on Discord. Graphics options include up to 4K and DLSS, DLAA, FSR and XeSS on compatible setups.
 
-1. Download and extract the portable Release archive to any folder with at least **40 GiB free** on the drive (e.g., `D:\Games\XC2-PC-Edition\`).
-   - Expected folder layout:
-     ```text
-     XC2-PC-Edition/
-       Xenoblade2Launcher.exe
-       runtime/
-         xenoblade2.exe
-         libLLVM-23.dll, libzstd.dll, libc++.dll, ...
-         xenoblade2.hints
-         pc_ui/
-           native_ui.dll
-           presence.dll
-           presence_names.tsv
-         localization/
-           pt-br/
-           pt-br-jp/
-         licenses/
-     ```
-2. Ensure **Microsoft Edge WebView2 Runtime** (pre-installed on Windows 10/11) and up-to-date **Vulkan GPU drivers** are installed.
-3. Open `Xenoblade2Launcher.exe`.
-4. Drag and drop (or select) your legal **Xenoblade Chronicles 2 — Nintendo Switch 2 Edition 3.0.1 `.nup`** file and click **Iniciar instalação agora**.
-5. *(Optional — Zero shader stutter)* In Onboarding Step 2 or **Configurações › Vídeo**, click **Preparar shaders agora** to build `shader_cache/xc2_shaders.snxs` locally from your own extracted `romfs` + expansions (or run `python tools/build_shader_catalog.py` from CLI).
-6. *(Optional — NVIDIA RTX DLSS 4.5 / DLAA)* In Onboarding Step 2 or **Configurações › Vídeo**, click **Baixar DLSS oficial** to fetch the Authenticode-signed `nvngx_dlss.dll` directly from NVIDIA's official `NVIDIA/DLSS` repo (otherwise AMD FSR 3.1 / Intel XeSS is used automatically).
+## Código, créditos e licenças / Source and credits
 
----
+O XC2Recomp é um projeto independente e sem fins comerciais, feito por fãs. O port usa uma versão adaptada do [ScarletNX](https://github.com/scarletnx/ScarletNX), que deriva do SwitchRecomp da MZ Labs.
 
-## Repository Structure
+Para compilar o launcher, o runtime e as extensões, siga o [guia de compilação / build guide](BUILDING.md). O launcher, as extensões e as ferramentas deste repositório seguem a [GPL-3.0-ou-posterior](LICENSE). O SwitchRecomp usa a [Apache License 2.0](LICENSE.apache). As atribuições estão no [NOTICE](NOTICE).
 
-```text
-launcher/              .NET 10 Windows launcher (App, Core, Tests, embedded WebView2 UI)
-extensions/
-  native_ui/           In-game PC Settings extension (C + unit tests)
-  presence/            Discord Rich Presence extension (C + unit tests)
-tools/
-  build_shader_catalog.py  Local read-only shader catalog builder (from user's own romfs)
-  xc2_archive.py           Read-only ARH1/ARD reader helper
-  build_release.ps1        Portable Release packager (stripped, privacy-audited)
-  audit_public_repo.py     Pre-push copyright & privacy verifier
-  xenoblade2.hints         Indirect-branch address hints for AOT recompilation
-BUILDING.md            Full build instructions (runtime, launcher, extensions, release zip)
-LICENSE                GNU General Public License v3.0 or later
-LICENSE.apache         Apache License 2.0 (SwitchRecomp upstream)
-NOTICE                 Required attribution notice (SwitchRecomp by MZ Labs & ScarletNX)
-```
-
----
-
-## Building from Source
-
-See [BUILDING.md](BUILDING.md) for complete build steps for the runtime fork (`xc2-sw2-native`), launcher, extensions, and portable Release archive.
-
----
-
-## Credits & Licensing
-
-- This project includes and builds upon software from **SwitchRecomp by MZ Labs** (licensed under the **Apache License 2.0**; see [LICENSE.apache](LICENSE.apache) and [NOTICE](NOTICE)) and **ScarletNX** (licensed under the **GNU General Public License v3.0 or later**; see [LICENSE](LICENSE)).
-- The launcher, extensions, and tooling in this repository are licensed under **GPL-3.0-or-later**.
-- *Xenoblade Chronicles 2* is a trademark of Nintendo / Monolith Soft. This project is an independent, non-commercial technical project with no affiliation with Nintendo or Monolith Soft.
+XC2Recomp is an independent, non-commercial fan project built on a fork of ScarletNX, which comes from MZ Labs' SwitchRecomp. The build guide, licenses and attribution are linked above.
