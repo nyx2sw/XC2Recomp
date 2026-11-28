@@ -54,7 +54,7 @@ public static class LauncherUpdater
 {
     public const string DefaultOwner = "nyx2sw";
     public const string DefaultRepo = "XC2Recomp";
-    public const string FallbackVersion = "0.2.4";
+    public const string FallbackVersion = "0.2.5";
 
     static readonly string[] UpdatableRuntimeDlls =
     [

@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <NoWarn>$(NoWarn);MSB3277</NoWarn>
-    <Version>0.2.4</Version>
+    <Version>0.2.5</Version>
     <Product>Xenoblade Chronicles 2: PC Edition Launcher</Product>
     <Deterministic>true</Deterministic>
     <PathMap>$(MSBuildProjectDirectory)=/src/launcher/App</PathMap>
